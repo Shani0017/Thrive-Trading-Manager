@@ -179,6 +179,7 @@ class TradeManagerApp:
         self._set_action_panel_enabled(False)
 
     def _set_action_panel_enabled(self, enabled: bool):
+        self._panel_enabled = enabled
         state = "normal" if enabled else "disabled"
         for widget in self.action_widgets:
             widget.config(state=state)
@@ -193,33 +194,50 @@ class TradeManagerApp:
             valid = pips > 0
         except ValueError:
             valid = False
-        self.be_pips_btn.config(state="normal" if (valid and self.selected_ticket is not None) else "disabled")
+        self.be_pips_btn.config(state="normal" if (valid and self._panel_enabled) else "disabled")
 
-    def _get_selected_position(self):
-        if self.selected_ticket is None:
+    def _get_live_position(self, ticket):
+        """Re-fetches the position directly from MT5 by ticket, rather than
+        trusting the periodically-refreshed self.positions_by_ticket cache --
+        that cache can be stale by up to one refresh interval, or much longer
+        while a confirmation dialog is open (tkinter keeps servicing the
+        background refresh timer even while a messagebox is modal). Returns
+        None if the ticket no longer exists (position already closed) or if
+        the MT5 call itself fails."""
+        try:
+            positions = self.mt5.positions_get(ticket=ticket)
+        except Exception:
             return None
-        return self.positions_by_ticket.get(self.selected_ticket)
+        if not positions:
+            return None
+        return positions[0]
 
-    def _show_result(self, result):
+    def _show_result(self, result, success_message="Done."):
         if result is None:
-            self.result_label.config(text="Action could not be completed (see above).", fg="red")
+            self.result_label.config(text="Action could not be completed.", fg="red")
             return
         if result.retcode == self.mt5.TRADE_RETCODE_DONE:
-            self.result_label.config(text="Done.", fg="dark green")
+            self.result_label.config(text=success_message, fg="dark green")
         else:
             self.result_label.config(
                 text=f"Broker rejected: {result.retcode} {getattr(result, 'comment', '')}", fg="red")
 
     def _on_breakeven_exact(self):
-        position = self._get_selected_position()
-        if position is None:
+        if self.selected_ticket is None:
             return
-        result = apply_breakeven(self.mt5, position, pips=0.0)
-        self._show_result(result)
+        position = self._get_live_position(self.selected_ticket)
+        if position is None:
+            self.result_label.config(text="Position no longer open.", fg="red")
+            return
+        try:
+            result = apply_breakeven(self.mt5, position, pips=0.0)
+        except Exception:
+            self.result_label.config(text="Action failed (MT5 error).", fg="red")
+            return
+        self._show_result(result, "SL moved to breakeven.")
 
     def _on_breakeven_pips(self):
-        position = self._get_selected_position()
-        if position is None:
+        if self.selected_ticket is None:
             return
         try:
             pips = float(self.pips_entry.get().strip())
@@ -229,23 +247,42 @@ class TradeManagerApp:
         if pips <= 0:
             self.result_label.config(text="Pips must be a positive number.", fg="red")
             return
-        result = apply_breakeven(self.mt5, position, pips=pips)
-        self._show_result(result)
+        position = self._get_live_position(self.selected_ticket)
+        if position is None:
+            self.result_label.config(text="Position no longer open.", fg="red")
+            return
+        try:
+            result = apply_breakeven(self.mt5, position, pips=pips)
+        except Exception:
+            self.result_label.config(text="Action failed (MT5 error).", fg="red")
+            return
+        self._show_result(result, f"SL moved to breakeven +{pips:g} pips.")
 
     def _on_half_close(self):
-        position = self._get_selected_position()
-        if position is None:
+        if self.selected_ticket is None:
             return
-        result = half_close(self.mt5, position)
+        position = self._get_live_position(self.selected_ticket)
+        if position is None:
+            self.result_label.config(text="Position no longer open.", fg="red")
+            return
+        try:
+            result = half_close(self.mt5, position)
+        except Exception:
+            self.result_label.config(text="Action failed (MT5 error).", fg="red")
+            return
         if result is None:
             self.result_label.config(
                 text="Cannot half-close: half the volume is below the broker's minimum lot.", fg="red")
             return
-        self._show_result(result)
+        self._show_result(result, "Half of the position closed.")
 
     def _on_full_close(self):
-        position = self._get_selected_position()
+        if self.selected_ticket is None:
+            return
+        ticket = self.selected_ticket
+        position = self._get_live_position(ticket)
         if position is None:
+            self.result_label.config(text="Position no longer open.", fg="red")
             return
         direction = "BUY" if position.type == self.mt5.POSITION_TYPE_BUY else "SELL"
         confirmed = messagebox.askyesno(
@@ -254,12 +291,23 @@ class TradeManagerApp:
         )
         if not confirmed:
             return
-        result = full_close(self.mt5, position)
-        self._show_result(result)
+        # Re-fetch again -- the position may have closed, or its volume may
+        # have changed, while the confirmation dialog was open (tkinter keeps
+        # servicing the background refresh timer during a modal dialog).
+        position = self._get_live_position(ticket)
+        if position is None:
+            self.result_label.config(
+                text="Position closed before confirmation completed -- no action taken.", fg="red")
+            return
+        try:
+            result = full_close(self.mt5, position)
+        except Exception:
+            self.result_label.config(text="Action failed (MT5 error).", fg="red")
+            return
+        self._show_result(result, "Position closed.")
 
     def _on_apply_sltp(self):
-        position = self._get_selected_position()
-        if position is None:
+        if self.selected_ticket is None:
             return
         sl_text = self.sl_entry.get().strip()
         tp_text = self.tp_entry.get().strip()
@@ -269,8 +317,16 @@ class TradeManagerApp:
         except ValueError:
             self.result_label.config(text="SL/TP must be numbers.", fg="red")
             return
-        result, error = apply_custom_sltp(self.mt5, position, sl, tp)
+        position = self._get_live_position(self.selected_ticket)
+        if position is None:
+            self.result_label.config(text="Position no longer open.", fg="red")
+            return
+        try:
+            result, error = apply_custom_sltp(self.mt5, position, sl, tp)
+        except Exception:
+            self.result_label.config(text="Action failed (MT5 error).", fg="red")
+            return
         if error:
             self.result_label.config(text=error, fg="red")
             return
-        self._show_result(result)
+        self._show_result(result, "SL/TP updated.")

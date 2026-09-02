@@ -55,6 +55,20 @@ def test_half_close_volume_returns_none_when_half_below_minimum():
     assert half_close_volume(volume=0.01, volume_step=0.01, volume_min=0.01) is None
 
 
+def test_half_close_volume_exact_multiple_not_undershot():
+    # Regression: 0.3 / 0.1 == 2.9999999999999996 in float arithmetic, which
+    # used to floor to 2 steps (0.2) instead of the correct 3 steps (0.3).
+    assert half_close_volume(volume=0.6, volume_step=0.1, volume_min=0.01) == pytest.approx(0.3)
+
+
+def test_half_close_volume_exact_multiple_not_undershot_small_step():
+    assert half_close_volume(volume=0.58, volume_step=0.01, volume_min=0.01) == pytest.approx(0.29)
+
+
+def test_half_close_volume_exact_multiple_not_undershot_larger_volume():
+    assert half_close_volume(volume=2.8, volume_step=0.1, volume_min=0.01) == pytest.approx(1.4)
+
+
 def test_validate_sltp_buy_sl_too_high_rejected():
     error = validate_sltp("BUY", current_price=2300.0, sl=2305.0, tp=None)
     assert error is not None

@@ -131,11 +131,14 @@ class TradeManagerApp:
             return
         self.selected_ticket = int(selection[0])
         self._set_action_panel_enabled(True)
+        self.result_label.config(text="")
         position = self.positions_by_ticket[self.selected_ticket]
         self.sl_entry.delete(0, tk.END)
-        self.sl_entry.insert(0, f"{position.sl:.5f}")
+        if position.sl:
+            self.sl_entry.insert(0, f"{position.sl:.5f}")
         self.tp_entry.delete(0, tk.END)
-        self.tp_entry.insert(0, f"{position.tp:.5f}")
+        if position.tp:
+            self.tp_entry.insert(0, f"{position.tp:.5f}")
 
     def _build_action_panel(self):
         frame = tk.Frame(self.root)
@@ -185,7 +188,6 @@ class TradeManagerApp:
             widget.config(state=state)
         if enabled:
             self._on_pips_entry_change(None)  # re-evaluate pips-button state for the new selection
-        self.result_label.config(text="")
 
     def _on_pips_entry_change(self, event):
         value = self.pips_entry.get().strip()
@@ -218,6 +220,10 @@ class TradeManagerApp:
             return
         if result.retcode == self.mt5.TRADE_RETCODE_DONE:
             self.result_label.config(text=success_message, fg="dark green")
+        elif result.retcode == self.mt5.TRADE_RETCODE_DONE_PARTIAL:
+            self.result_label.config(
+                text=f"Partially filled — {success_message} Check remaining volume before retrying.",
+                fg="#b8860b")
         else:
             self.result_label.config(
                 text=f"Broker rejected: {result.retcode} {getattr(result, 'comment', '')}", fg="red")

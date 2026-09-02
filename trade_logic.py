@@ -24,9 +24,14 @@ def half_close_volume(volume: float, volume_step: float, volume_min: float) -> f
     that case). Note: since this always rounds DOWN from exactly half, the
     remaining volume (volume - rounded) is always >= rounded, so there is
     no separate "remainder too small" case to check once rounded itself
-    clears volume_min."""
+    clears volume_min.
+
+    The tiny epsilon in the steps calculation compensates for float division
+    landing just under an integer on exact multiples (e.g. 0.3 / 0.1 ==
+    2.9999999999999996 in IEEE 754), which would otherwise silently floor to
+    one whole step below the correct half-close volume."""
     half = volume / 2
-    steps = int(half / volume_step)
+    steps = int(half / volume_step + 1e-9)
     rounded = round(steps * volume_step, 8)
     if rounded < volume_min:
         return None

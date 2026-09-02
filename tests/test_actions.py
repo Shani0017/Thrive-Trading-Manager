@@ -94,6 +94,8 @@ def test_half_close_sends_half_volume_at_market(mock_mt5, buy_position):
     assert sent["volume"] == pytest.approx(0.05)
     assert sent["type"] == mock_mt5.ORDER_TYPE_SELL  # closing a BUY = SELL order
     assert sent["price"] == 2299.8  # bid, since closing a BUY
+    assert sent["position"] == 12345
+    assert sent["symbol"] == "XAUUSD"
     assert result.retcode == 10009
 
 
@@ -111,6 +113,8 @@ def test_full_close_sends_full_volume_at_market(mock_mt5, buy_position):
     sent = mock_mt5.order_send.call_args[0][0]
     assert sent["volume"] == pytest.approx(0.10)
     assert sent["type"] == mock_mt5.ORDER_TYPE_SELL
+    assert sent["position"] == 12345
+    assert sent["symbol"] == "XAUUSD"
 
 
 def test_full_close_sell_position_uses_buy_order_and_ask_price(mock_mt5, sell_position):
@@ -121,6 +125,17 @@ def test_full_close_sell_position_uses_buy_order_and_ask_price(mock_mt5, sell_po
     assert sent["price"] == 2300.2  # ask, since closing a SELL
 
 
+def test_half_close_sell_position_uses_buy_order_and_ask_price(mock_mt5, sell_position):
+    result = half_close(mock_mt5, sell_position)
+
+    sent = mock_mt5.order_send.call_args[0][0]
+    assert sent["type"] == mock_mt5.ORDER_TYPE_BUY
+    assert sent["price"] == 2300.2  # ask, since closing a SELL
+    assert sent["volume"] == pytest.approx(0.05)
+    assert sent["position"] == 54321
+    assert result.retcode == 10009
+
+
 def test_apply_custom_sltp_valid_values_sends_order(mock_mt5, buy_position):
     result, error = apply_custom_sltp(mock_mt5, buy_position, sl=2285.0, tp=2310.0)
 
@@ -128,7 +143,18 @@ def test_apply_custom_sltp_valid_values_sends_order(mock_mt5, buy_position):
     sent = mock_mt5.order_send.call_args[0][0]
     assert sent["sl"] == pytest.approx(2285.0)
     assert sent["tp"] == pytest.approx(2310.0)
+    assert sent["position"] == 12345
+    assert sent["symbol"] == "XAUUSD"
     assert result.retcode == 10009
+
+
+def test_apply_custom_sltp_partial_update_keeps_other_field(mock_mt5, buy_position):
+    result, error = apply_custom_sltp(mock_mt5, buy_position, sl=2285.0, tp=None)
+
+    assert error is None
+    sent = mock_mt5.order_send.call_args[0][0]
+    assert sent["sl"] == pytest.approx(2285.0)
+    assert sent["tp"] == buy_position.tp  # unchanged since tp=None means "leave as-is"
 
 
 def test_apply_custom_sltp_invalid_sl_rejected_before_sending(mock_mt5, buy_position):

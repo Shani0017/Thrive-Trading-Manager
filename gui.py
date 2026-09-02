@@ -13,6 +13,8 @@ class TradeManagerApp:
         self.connected = False
         self.selected_ticket = None
         self.positions_by_ticket = {}
+        self._refresh_job = None
+        self._reconnect_job = None
 
         self.status_label = tk.Label(root, text="Connecting to MT5...", fg="black",
                                       font=("Segoe UI", 10, "bold"))
@@ -33,47 +35,89 @@ class TradeManagerApp:
 
         self._build_action_panel()
 
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._try_connect()
-        self.root.after(self.REFRESH_MS, self._refresh_loop)
+        self._refresh_job = self.root.after(self.REFRESH_MS, self._refresh_loop)
+
+    def _on_close(self):
+        for job in (self._refresh_job, self._reconnect_job):
+            if job is not None:
+                try:
+                    self.root.after_cancel(job)
+                except Exception:
+                    pass
+        self.root.destroy()
 
     def _try_connect(self):
-        ok = self.mt5.initialize()
+        try:
+            ok = self.mt5.initialize()
+        except Exception:
+            ok = False
+
         if ok:
             self.connected = True
-            account = self.mt5.account_info()
-            login = account.login if account else "?"
+            try:
+                account = self.mt5.account_info()
+                login = account.login if account else "?"
+            except Exception:
+                login = "?"
             self.status_label.config(text=f"Connected to MT5 (account {login})", fg="dark green")
         else:
             self.connected = False
             self.status_label.config(text="MT5 not connected — please open and log into MetaTrader 5",
                                       fg="red")
-            self.root.after(self.RECONNECT_MS, self._try_connect)
+            self._reconnect_job = self.root.after(self.RECONNECT_MS, self._try_connect)
 
     def _refresh_loop(self):
         if self.connected:
             self._refresh_positions()
-        self.root.after(self.REFRESH_MS, self._refresh_loop)
+        self._refresh_job = self.root.after(self.REFRESH_MS, self._refresh_loop)
+
+    def _handle_connection_lost(self):
+        self.connected = False
+        self.status_label.config(text="MT5 not connected — please open and log into MetaTrader 5",
+                                  fg="red")
+        self._reconnect_job = self.root.after(self.RECONNECT_MS, self._try_connect)
 
     def _refresh_positions(self):
-        positions = self.mt5.positions_get()
+        try:
+            positions = self.mt5.positions_get()
+        except Exception:
+            positions = None
+
         if positions is None:
-            positions = ()
+            # The real MetaTrader5 package returns None specifically on error/
+            # disconnection, and an empty tuple for the valid "no open positions"
+            # case -- these must NOT be treated the same, or a real disconnection
+            # silently looks like an empty table with a stale "Connected" banner.
+            self._handle_connection_lost()
+            return
+
         self.positions_by_ticket = {p.ticket: p for p in positions}
 
-        selected_still_open = self.selected_ticket in self.positions_by_ticket
+        # Update rows in place (rather than delete-then-reinsert) so that a
+        # periodic refresh never re-fires <<TreeviewSelect>> for the row the
+        # user already has selected -- deleting and re-adding an item counts
+        # as a new selection to tkinter, which would otherwise clobber
+        # whatever the user is mid-typing in the SL/TP fields every 2 seconds.
+        current_iids = set(self.tree.get_children())
+        new_iids = {str(p.ticket) for p in positions}
 
-        self.tree.delete(*self.tree.get_children())
+        for iid in current_iids - new_iids:
+            self.tree.delete(iid)
+
         for p in positions:
             direction = "BUY" if p.type == self.mt5.POSITION_TYPE_BUY else "SELL"
-            self.tree.insert("", "end", iid=str(p.ticket), values=(
-                p.symbol, direction, p.volume,
-                f"{p.price_open:.5f}", f"{p.price_current:.5f}",
-                f"{p.profit:.2f}", f"{p.sl:.5f}", f"{p.tp:.5f}",
-            ))
+            values = (p.symbol, direction, p.volume,
+                      f"{p.price_open:.5f}", f"{p.price_current:.5f}",
+                      f"{p.profit:.2f}", f"{p.sl:.5f}", f"{p.tp:.5f}")
+            iid = str(p.ticket)
+            if iid in current_iids:
+                self.tree.item(iid, values=values)
+            else:
+                self.tree.insert("", "end", iid=iid, values=values)
 
-        if selected_still_open:
-            self.tree.selection_set(str(self.selected_ticket))
-        else:
+        if self.selected_ticket not in self.positions_by_ticket:
             self.selected_ticket = None
             self._set_action_panel_enabled(False)
 

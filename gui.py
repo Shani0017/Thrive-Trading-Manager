@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
+from tkinter import messagebox
+from actions import apply_breakeven, half_close, full_close, apply_custom_sltp
 
 
 class TradeManagerApp:
@@ -134,3 +136,141 @@ class TradeManagerApp:
         self.sl_entry.insert(0, f"{position.sl:.5f}")
         self.tp_entry.delete(0, tk.END)
         self.tp_entry.insert(0, f"{position.tp:.5f}")
+
+    def _build_action_panel(self):
+        frame = tk.Frame(self.root)
+        frame.pack(fill="x", padx=8, pady=8)
+
+        self.be_exact_btn = tk.Button(frame, text="Breakeven (Exact)", command=self._on_breakeven_exact)
+        self.be_exact_btn.grid(row=0, column=0, padx=4, pady=4, sticky="ew")
+
+        self.pips_entry = tk.Entry(frame, width=6)
+        self.pips_entry.grid(row=0, column=1, padx=(4, 0), pady=4)
+        self.pips_entry.bind("<KeyRelease>", self._on_pips_entry_change)
+
+        self.be_pips_btn = tk.Button(frame, text="Breakeven + Pips", command=self._on_breakeven_pips)
+        self.be_pips_btn.grid(row=0, column=2, padx=4, pady=4, sticky="ew")
+
+        self.half_close_btn = tk.Button(frame, text="Half Close", command=self._on_half_close)
+        self.half_close_btn.grid(row=0, column=3, padx=4, pady=4, sticky="ew")
+
+        self.full_close_btn = tk.Button(frame, text="Full Close", command=self._on_full_close, fg="red")
+        self.full_close_btn.grid(row=0, column=4, padx=4, pady=4, sticky="ew")
+
+        tk.Label(frame, text="SL:").grid(row=1, column=0, sticky="e")
+        self.sl_entry = tk.Entry(frame, width=12)
+        self.sl_entry.grid(row=1, column=1, padx=4, pady=4)
+
+        tk.Label(frame, text="TP:").grid(row=1, column=2, sticky="e")
+        self.tp_entry = tk.Entry(frame, width=12)
+        self.tp_entry.grid(row=1, column=3, padx=4, pady=4)
+
+        self.apply_sltp_btn = tk.Button(frame, text="Apply SL/TP", command=self._on_apply_sltp)
+        self.apply_sltp_btn.grid(row=1, column=4, padx=4, pady=4, sticky="ew")
+
+        self.result_label = tk.Label(self.root, text="", fg="black")
+        self.result_label.pack(fill="x", padx=8, pady=(0, 8))
+
+        self.action_widgets = [
+            self.be_exact_btn, self.pips_entry, self.be_pips_btn,
+            self.half_close_btn, self.full_close_btn,
+            self.sl_entry, self.tp_entry, self.apply_sltp_btn,
+        ]
+        self._set_action_panel_enabled(False)
+
+    def _set_action_panel_enabled(self, enabled: bool):
+        state = "normal" if enabled else "disabled"
+        for widget in self.action_widgets:
+            widget.config(state=state)
+        if enabled:
+            self._on_pips_entry_change(None)  # re-evaluate pips-button state for the new selection
+        self.result_label.config(text="")
+
+    def _on_pips_entry_change(self, event):
+        value = self.pips_entry.get().strip()
+        try:
+            pips = float(value)
+            valid = pips > 0
+        except ValueError:
+            valid = False
+        self.be_pips_btn.config(state="normal" if (valid and self.selected_ticket is not None) else "disabled")
+
+    def _get_selected_position(self):
+        if self.selected_ticket is None:
+            return None
+        return self.positions_by_ticket.get(self.selected_ticket)
+
+    def _show_result(self, result):
+        if result is None:
+            self.result_label.config(text="Action could not be completed (see above).", fg="red")
+            return
+        if result.retcode == self.mt5.TRADE_RETCODE_DONE:
+            self.result_label.config(text="Done.", fg="dark green")
+        else:
+            self.result_label.config(
+                text=f"Broker rejected: {result.retcode} {getattr(result, 'comment', '')}", fg="red")
+
+    def _on_breakeven_exact(self):
+        position = self._get_selected_position()
+        if position is None:
+            return
+        result = apply_breakeven(self.mt5, position, pips=0.0)
+        self._show_result(result)
+
+    def _on_breakeven_pips(self):
+        position = self._get_selected_position()
+        if position is None:
+            return
+        try:
+            pips = float(self.pips_entry.get().strip())
+        except ValueError:
+            self.result_label.config(text="Enter a valid positive pip value first.", fg="red")
+            return
+        if pips <= 0:
+            self.result_label.config(text="Pips must be a positive number.", fg="red")
+            return
+        result = apply_breakeven(self.mt5, position, pips=pips)
+        self._show_result(result)
+
+    def _on_half_close(self):
+        position = self._get_selected_position()
+        if position is None:
+            return
+        result = half_close(self.mt5, position)
+        if result is None:
+            self.result_label.config(
+                text="Cannot half-close: half the volume is below the broker's minimum lot.", fg="red")
+            return
+        self._show_result(result)
+
+    def _on_full_close(self):
+        position = self._get_selected_position()
+        if position is None:
+            return
+        direction = "BUY" if position.type == self.mt5.POSITION_TYPE_BUY else "SELL"
+        confirmed = messagebox.askyesno(
+            "Confirm Close",
+            f"Close {position.volume} {position.symbol} {direction} at market?",
+        )
+        if not confirmed:
+            return
+        result = full_close(self.mt5, position)
+        self._show_result(result)
+
+    def _on_apply_sltp(self):
+        position = self._get_selected_position()
+        if position is None:
+            return
+        sl_text = self.sl_entry.get().strip()
+        tp_text = self.tp_entry.get().strip()
+        try:
+            sl = float(sl_text) if sl_text else None
+            tp = float(tp_text) if tp_text else None
+        except ValueError:
+            self.result_label.config(text="SL/TP must be numbers.", fg="red")
+            return
+        result, error = apply_custom_sltp(self.mt5, position, sl, tp)
+        if error:
+            self.result_label.config(text=error, fg="red")
+            return
+        self._show_result(result)

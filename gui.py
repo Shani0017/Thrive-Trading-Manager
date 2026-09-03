@@ -1,39 +1,38 @@
 import os
 import sys
+from datetime import datetime
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from PIL import Image
 from actions import apply_breakeven, half_close, full_close, apply_custom_sltp
+from trade_logic import pip_size as _pip_size, breakeven_price as _breakeven_price
 
-ctk.set_appearance_mode("light")
+ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-# -- Palette: clean/light, one accent color, soft semantic tints. Modeled on
-# the modern-SaaS-dashboard look (Notion/Linear/Stripe) explicitly requested
-# over the earlier dark trading-terminal theme. --
-BG = "#f6f7f9"
-CARD = "#ffffff"
-BORDER = "#e5e7eb"
-TEXT = "#111827"
-MUTED = "#6b7280"
-ACCENT = "#4f46e5"
-ACCENT_HOVER = "#4338ca"
-SUCCESS = "#059669"
-SUCCESS_BG = "#ecfdf5"
-DANGER = "#dc2626"
-DANGER_HOVER = "#b91c1c"
-DANGER_BG = "#fef2f2"
-WARNING = "#d97706"
-WARNING_BG = "#fffbeb"
-LOGO_CHIP_BG = "#111827"
+# Dark trading-dashboard palette, matched to the user's reference mockup.
+BG = "#0f1115"
+CARD = "#171a21"
+CARD_ALT = "#1d212a"
+BORDER = "#262b36"
+TEXT = "#e8eaed"
+MUTED = "#8a8f98"
+BLUE = "#4f9cf9"
+BLUE_HOVER = "#3b82f6"
+GREEN = "#4ade80"
+GREEN_BG = "#123322"
+RED = "#f87171"
+RED_BG = "#3a1414"
+AMBER = "#fbbf24"
+AMBER_BG = "#3a2e0f"
 
-_RESULT_STYLES = {
-    "success": (SUCCESS_BG, SUCCESS),
-    "error": (DANGER_BG, DANGER),
-    "warning": (WARNING_BG, WARNING),
-    "neutral": (BG, MUTED),
+_TONE_STYLES = {
+    "success": (GREEN_BG, GREEN),
+    "error": (RED_BG, RED),
+    "warning": (AMBER_BG, AMBER),
+    "neutral": (CARD_ALT, MUTED),
 }
 
 
@@ -46,11 +45,10 @@ def _resource_path(relative_path: str) -> str:
 
 
 class TradeManagerApp:
-    # How often the app polls MT5 for open-position updates. MT5's Python API
-    # has no push/subscribe mechanism -- positions_get() must be polled -- so
-    # some delay is unavoidable, but a single positions_get() call is cheap
-    # enough that polling every 500ms keeps the table feeling near-instant
-    # without hammering the terminal's IPC layer.
+    # How often the app polls MT5 for open-position/account updates. MT5's
+    # Python API has no push/subscribe mechanism -- positions_get() must be
+    # polled -- so some delay is unavoidable, but a single call is cheap
+    # enough that polling every 500ms keeps the UI feeling near-instant.
     REFRESH_MS = 500
     RECONNECT_MS = 5000
 
@@ -58,208 +56,395 @@ class TradeManagerApp:
         self.root = root
         self.mt5 = mt5
         self.root.title("MT5 Trade Manager")
-        self.root.geometry("1040x780")
-        self.root.minsize(900, 620)
+        self.root.geometry("1320x860")
+        self.root.minsize(1120, 700)
         self.root.configure(fg_color=BG)
         self.connected = False
         self.selected_ticket = None
         self.positions_by_ticket = {}
+        self.be_mode = "exact"
         self._refresh_job = None
         self._reconnect_job = None
 
-        # Scrollable outer container: a safety net so content is never
+        # Scrollable outer container: a safety net so content can never be
         # silently cut off below the window edge on a shorter screen or
-        # under Windows display scaling -- it simply becomes scrollable
-        # instead, rather than invisible with no way to reach it.
+        # under Windows display scaling -- it becomes scrollable instead.
         scroll = ctk.CTkScrollableFrame(root, fg_color=BG)
         scroll.pack(fill="both", expand=True)
         content = scroll
 
-        header = ctk.CTkFrame(content, fg_color="transparent")
-        header.pack(fill="x", padx=24, pady=(20, 12))
+        self._build_topbar(content)
+        self._build_account_overview(content)
 
-        logo_chip = ctk.CTkFrame(header, fg_color=LOGO_CHIP_BG, corner_radius=8)
-        logo_chip.pack(side="left")
-        try:
-            logo_img = Image.open(_resource_path("assets/logo.png"))
-            self._logo_image = ctk.CTkImage(logo_img, size=(96, 35))
-            ctk.CTkLabel(logo_chip, image=self._logo_image, text="").pack(padx=14, pady=8)
-        except Exception:
-            ctk.CTkLabel(logo_chip, text="THRIVE", text_color="#ffffff",
-                         font=ctk.CTkFont(size=14, weight="bold")).pack(padx=14, pady=8)
+        split = ctk.CTkFrame(content, fg_color="transparent")
+        split.pack(fill="both", expand=True, padx=20, pady=(4, 12))
 
-        self.status_badge = ctk.CTkFrame(header, corner_radius=14, fg_color=WARNING_BG)
-        self.status_badge.pack(side="right")
-        self.status_label = ctk.CTkLabel(self.status_badge, text="Connecting to MT5...",
-                                          font=ctk.CTkFont(size=12, weight="bold"),
-                                          text_color=WARNING)
-        self.status_label.pack(padx=14, pady=6)
+        left = ctk.CTkFrame(split, fg_color="transparent")
+        left.pack(side="left", fill="both", expand=True)
 
-        table_card = ctk.CTkFrame(content, corner_radius=14, fg_color=CARD,
-                                   border_width=1, border_color=BORDER)
-        table_card.pack(fill="both", expand=True, padx=24, pady=8)
+        right = ctk.CTkFrame(split, fg_color="transparent", width=420)
+        right.pack(side="left", fill="y", padx=(16, 0))
+        right.pack_propagate(False)
 
-        ctk.CTkLabel(table_card, text="Open Positions", font=ctk.CTkFont(size=13, weight="bold"),
-                     text_color=TEXT).pack(anchor="w", padx=18, pady=(16, 8))
+        self._build_positions_panel(left)
+        self._build_detail_panel(right)
 
-        self._setup_treeview_style()
-
-        columns = ("symbol", "direction", "volume", "entry", "current", "pnl", "sl", "tp")
-        headings = {
-            "symbol": "Symbol", "direction": "Dir", "volume": "Volume",
-            "entry": "Entry", "current": "Current", "pnl": "P&L",
-            "sl": "SL", "tp": "TP",
-        }
-        widths = {"symbol": 90, "direction": 60, "volume": 70, "entry": 100,
-                  "current": 100, "pnl": 90, "sl": 100, "tp": 100}
-        self.tree = ttk.Treeview(table_card, columns=columns, show="headings",
-                                  height=8, style="Positions.Treeview")
-        for col in columns:
-            self.tree.heading(col, text=headings[col])
-            self.tree.column(col, width=widths[col], anchor="center", stretch=True)
-        self.tree.pack(fill="both", expand=True, padx=18, pady=(0, 18))
-        self.tree.bind("<<TreeviewSelect>>", self._on_select)
-
-        self._build_action_panel(content)
-
-        self.result_banner = ctk.CTkFrame(content, corner_radius=10, fg_color=BG)
-        self.result_banner.pack(fill="x", padx=24, pady=(0, 20))
-        self.result_label = ctk.CTkLabel(self.result_banner, text="",
-                                          font=ctk.CTkFont(size=12, weight="bold"),
-                                          anchor="w")
-        self.result_label.pack(anchor="w", padx=14, pady=8)
+        self._build_footer(content)
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._try_connect()
         self._refresh_job = self.root.after(self.REFRESH_MS, self._refresh_loop)
 
+    # ------------------------------------------------------------------
+    # Layout construction
+    # ------------------------------------------------------------------
+
+    def _build_topbar(self, root):
+        bar = ctk.CTkFrame(root, fg_color="transparent")
+        bar.pack(fill="x", padx=20, pady=(20, 12))
+
+        try:
+            logo_img = Image.open(_resource_path("assets/logo.png"))
+            self._logo_image = ctk.CTkImage(logo_img, size=(84, 31))
+            ctk.CTkLabel(bar, image=self._logo_image, text="").pack(side="left", padx=(0, 20))
+        except Exception:
+            ctk.CTkLabel(bar, text="THRIVE", text_color=TEXT,
+                         font=ctk.CTkFont(size=16, weight="bold")).pack(side="left", padx=(0, 20))
+
+        self.status_badge = ctk.CTkFrame(bar, corner_radius=14, fg_color=AMBER_BG)
+        self.status_badge.pack(side="left", padx=(0, 16))
+        self.status_label = ctk.CTkLabel(self.status_badge, text="● Connecting...",
+                                          font=ctk.CTkFont(size=12, weight="bold"), text_color=AMBER)
+        self.status_label.pack(padx=14, pady=6)
+
+        account_chip = ctk.CTkFrame(bar, corner_radius=10, fg_color=CARD, border_width=1,
+                                     border_color=BORDER)
+        account_chip.pack(side="left", padx=(0, 16))
+        inner = ctk.CTkFrame(account_chip, fg_color="transparent")
+        inner.pack(padx=12, pady=6)
+        ctk.CTkLabel(inner, text="Account", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
+            side="left", padx=(0, 8))
+        self.account_number_label = ctk.CTkLabel(inner, text="—", font=ctk.CTkFont(size=12, weight="bold"),
+                                                   text_color=TEXT)
+        self.account_number_label.pack(side="left", padx=(0, 6))
+        ctk.CTkButton(inner, text="Copy", width=44, height=22, font=ctk.CTkFont(size=10),
+                      fg_color=CARD_ALT, hover_color=BORDER, text_color=MUTED,
+                      command=self._copy_account_number).pack(side="left")
+
+        self.position_count_chip = ctk.CTkFrame(bar, corner_radius=10, fg_color=CARD, border_width=1,
+                                                  border_color=BORDER)
+        self.position_count_chip.pack(side="left", padx=(0, 12))
+        self.position_count_value = ctk.CTkLabel(self.position_count_chip, text="0",
+                                                   font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT)
+        self.position_count_value.pack(padx=16, pady=(6, 0))
+        ctk.CTkLabel(self.position_count_chip, text="Open Positions", font=ctk.CTkFont(size=9),
+                     text_color=MUTED).pack(padx=16, pady=(0, 6))
+
+        self.active_symbol_chip = ctk.CTkFrame(bar, corner_radius=10, fg_color=CARD, border_width=1,
+                                                 border_color=BORDER)
+        self.active_symbol_chip.pack(side="left")
+        self.active_symbol_value = ctk.CTkLabel(self.active_symbol_chip, text="—",
+                                                  font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT)
+        self.active_symbol_value.pack(padx=16, pady=(6, 0))
+        ctk.CTkLabel(self.active_symbol_chip, text="Active Symbol", font=ctk.CTkFont(size=9),
+                     text_color=MUTED).pack(padx=16, pady=(0, 6))
+
+    def _copy_account_number(self):
+        text = self.account_number_label.cget("text")
+        if text and text != "—":
+            self.root.clipboard_clear()
+            self.root.clipboard_append(text)
+
+    def _build_account_overview(self, root):
+        card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
+        card.pack(fill="x", padx=20, pady=(0, 12))
+
+        ctk.CTkLabel(card, text="ACCOUNT OVERVIEW", font=ctk.CTkFont(size=10, weight="bold"),
+                     text_color=MUTED).pack(anchor="w", padx=18, pady=(14, 8))
+
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=18, pady=(0, 16))
+
+        self.balance_value = self._stat_cell(row, "Balance")
+        self.equity_value = self._stat_cell(row, "Equity")
+        self.margin_value = self._stat_cell(row, "Margin")
+        self.free_margin_value = self._stat_cell(row, "Free Margin")
+        self.profit_value, self.profit_pct_value = self._stat_cell(row, "Profit / Loss", with_pct=True)
+
+    def _stat_cell(self, parent, label, with_pct=False):
+        cell = ctk.CTkFrame(parent, fg_color="transparent")
+        cell.pack(side="left", expand=True, fill="x")
+        ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=11), text_color=MUTED).pack(anchor="w")
+        value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=18, weight="bold"), text_color=TEXT)
+        value.pack(anchor="w", pady=(2, 0))
+        if with_pct:
+            pct = ctk.CTkLabel(cell, text="", font=ctk.CTkFont(size=11), text_color=MUTED)
+            pct.pack(anchor="w")
+            return value, pct
+        return value
+
+    def _build_positions_panel(self, root):
+        card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
+        card.pack(fill="both", expand=True)
+
+        self.positions_title = ctk.CTkLabel(card, text="OPEN POSITIONS (0)",
+                                             font=ctk.CTkFont(size=11, weight="bold"), text_color=MUTED)
+        self.positions_title.pack(anchor="w", padx=18, pady=(16, 8))
+
+        self._setup_treeview_style()
+
+        columns = ("symbol", "direction", "volume", "entry", "current", "pnl", "pips", "sl", "tp")
+        headings = {
+            "symbol": "Symbol", "direction": "Direction", "volume": "Volume",
+            "entry": "Entry Price", "current": "Current Price", "pnl": "P&L",
+            "pips": "Pips", "sl": "SL", "tp": "TP",
+        }
+        widths = {"symbol": 85, "direction": 80, "volume": 65, "entry": 95,
+                  "current": 95, "pnl": 85, "pips": 65, "sl": 95, "tp": 95}
+        self.tree = ttk.Treeview(card, columns=columns, show="headings", height=10,
+                                  style="Positions.Treeview")
+        for col in columns:
+            self.tree.heading(col, text=headings[col])
+            self.tree.column(col, width=widths[col], anchor="center", stretch=True)
+        self.tree.pack(fill="both", expand=True, padx=18, pady=(0, 8))
+        self.tree.bind("<<TreeviewSelect>>", self._on_select)
+
+        self.table_summary_label = ctk.CTkLabel(card, text="0 position(s)  •  Total P/L: $0.00",
+                                                  font=ctk.CTkFont(size=11), text_color=MUTED)
+        self.table_summary_label.pack(anchor="w", padx=18, pady=(0, 16))
+
     def _setup_treeview_style(self):
         """ttk.Treeview has no CustomTkinter equivalent (CTk provides no table
-        widget), so it's embedded here and themed by hand to match the light
+        widget), so it's embedded here and themed by hand to match the dark
         card chrome around it -- a standard pattern for CustomTkinter apps
         that need tabular data."""
         style = ttk.Style()
         style.theme_use("clam")
         style.configure("Positions.Treeview", background=CARD, fieldbackground=CARD,
                          foreground=TEXT, rowheight=30, font=("Segoe UI", 10), borderwidth=0)
-        style.configure("Positions.Treeview.Heading", background="#f9fafb", foreground=MUTED,
+        style.configure("Positions.Treeview.Heading", background=CARD_ALT, foreground=MUTED,
                          font=("Segoe UI", 9, "bold"), borderwidth=0, relief="flat")
-        style.map("Positions.Treeview.Heading", background=[("active", "#f3f4f6")])
-        style.map("Positions.Treeview", background=[("selected", "#eef2ff")],
+        style.map("Positions.Treeview.Heading", background=[("active", BORDER)])
+        style.map("Positions.Treeview", background=[("selected", "#1f3a5f")],
                   foreground=[("selected", TEXT)])
 
-    def _build_action_panel(self, root):
-        panel = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD,
-                              border_width=1, border_color=BORDER)
-        panel.pack(fill="x", padx=24, pady=8)
+    def _make_number_field(self, parent, width=80, step=0.1, decimals=5, default=""):
+        """A numeric entry with small +/- steppers, matching the reference
+        mockup's spinner inputs. Returns (frame, entry)."""
+        frame = ctk.CTkFrame(parent, fg_color="transparent")
+        entry = ctk.CTkEntry(frame, width=width, height=32, border_color=BORDER,
+                              fg_color=CARD, text_color=TEXT)
+        if default:
+            entry.insert(0, default)
+        entry.pack(side="left")
+        stepper = ctk.CTkFrame(frame, fg_color="transparent")
+        stepper.pack(side="left", padx=(2, 0))
 
-        ctk.CTkLabel(panel, text="Actions", font=ctk.CTkFont(size=13, weight="bold"),
-                     text_color=TEXT).pack(anchor="w", padx=18, pady=(16, 4))
+        def _bump(delta):
+            try:
+                val = float(entry.get().strip() or 0)
+            except ValueError:
+                val = 0.0
+            entry.delete(0, tk.END)
+            entry.insert(0, f"{val + delta:.{decimals}f}")
+            entry.event_generate("<KeyRelease>")
 
-        # --- Stop Loss to Breakeven ---
-        be_section = ctk.CTkFrame(panel, fg_color="transparent")
-        be_section.pack(fill="x", padx=18, pady=(4, 12))
+        ctk.CTkButton(stepper, text="▲", width=18, height=15, font=ctk.CTkFont(size=8),
+                      fg_color=CARD, text_color=MUTED, hover_color=BORDER,
+                      command=lambda: _bump(step)).pack()
+        ctk.CTkButton(stepper, text="▼", width=18, height=15, font=ctk.CTkFont(size=8),
+                      fg_color=CARD, text_color=MUTED, hover_color=BORDER,
+                      command=lambda: _bump(-step)).pack()
+        return frame, entry
 
-        ctk.CTkLabel(be_section, text="STOP LOSS TO BREAKEVEN", font=ctk.CTkFont(size=10, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", pady=(0, 8))
+    def _build_detail_panel(self, root):
+        card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
+        card.pack(fill="both", expand=True)
 
-        be_row = ctk.CTkFrame(be_section, fg_color="transparent")
-        be_row.pack(fill="x")
+        header = ctk.CTkFrame(card, fg_color="transparent")
+        header.pack(fill="x", padx=18, pady=(16, 8))
 
-        self.be_exact_btn = ctk.CTkButton(be_row, text="Breakeven (Exact)", width=170, height=36,
-                                           fg_color=ACCENT, hover_color=ACCENT_HOVER,
-                                           command=self._on_breakeven_exact)
-        self.be_exact_btn.pack(side="left", padx=(0, 24))
+        top_row = ctk.CTkFrame(header, fg_color="transparent")
+        top_row.pack(fill="x")
+        self.detail_symbol_label = ctk.CTkLabel(top_row, text="No position selected",
+                                                 font=ctk.CTkFont(size=17, weight="bold"), text_color=TEXT)
+        self.detail_symbol_label.pack(side="left")
+        self.detail_direction_badge = ctk.CTkFrame(top_row, corner_radius=6, fg_color=CARD_ALT)
+        self.detail_direction_badge.pack(side="left", padx=(10, 0))
+        self.detail_direction_label = ctk.CTkLabel(self.detail_direction_badge, text="",
+                                                     font=ctk.CTkFont(size=11, weight="bold"), text_color=MUTED)
+        self.detail_direction_label.pack(padx=10, pady=3)
 
-        ctk.CTkLabel(be_row, text="Breakeven +", font=ctk.CTkFont(size=12),
-                     text_color=TEXT).pack(side="left", padx=(0, 6))
-        self.pips_entry = ctk.CTkEntry(be_row, width=70, height=36, placeholder_text="e.g. 5",
-                                        border_color=BORDER)
-        self.pips_entry.pack(side="left", padx=(0, 6))
-        self.pips_entry.bind("<KeyRelease>", self._on_pips_entry_change)
-        ctk.CTkLabel(be_row, text="pips", font=ctk.CTkFont(size=12), text_color=MUTED).pack(
-            side="left", padx=(0, 12))
-        self.be_pips_btn = ctk.CTkButton(be_row, text="Apply", width=90, height=36,
-                                          fg_color=ACCENT, hover_color=ACCENT_HOVER,
-                                          command=self._on_breakeven_pips)
-        self.be_pips_btn.pack(side="left")
+        pl_row = ctk.CTkFrame(header, fg_color="transparent")
+        pl_row.pack(fill="x", pady=(6, 0))
+        self.detail_lots_label = ctk.CTkLabel(pl_row, text="— lots", font=ctk.CTkFont(size=12),
+                                               text_color=MUTED)
+        self.detail_lots_label.pack(side="left")
+        self.detail_pl_label = ctk.CTkLabel(pl_row, text="", font=ctk.CTkFont(size=16, weight="bold"),
+                                             text_color=TEXT)
+        self.detail_pl_label.pack(side="right")
+        self.detail_pl_pips_label = ctk.CTkLabel(pl_row, text="", font=ctk.CTkFont(size=11),
+                                                   text_color=MUTED)
+        self.detail_pl_pips_label.pack(side="right", padx=(0, 8))
 
-        ctk.CTkLabel(be_section,
-                     text="Locks in profit: moves the stop that many pips past your entry price,\n"
-                          "in the direction of the trade, instead of leaving it exactly at entry.",
-                     font=ctk.CTkFont(size=10), text_color=MUTED, justify="left").pack(
-            anchor="w", pady=(8, 0))
+        price_row = ctk.CTkFrame(card, fg_color=CARD_ALT, corner_radius=10)
+        price_row.pack(fill="x", padx=18, pady=(4, 14))
+        entry_cell = ctk.CTkFrame(price_row, fg_color="transparent")
+        entry_cell.pack(side="left", expand=True, fill="x", padx=14, pady=10)
+        ctk.CTkLabel(entry_cell, text="Entry Price", font=ctk.CTkFont(size=10), text_color=MUTED).pack(anchor="w")
+        self.detail_entry_price_label = ctk.CTkLabel(entry_cell, text="—",
+                                                       font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT)
+        self.detail_entry_price_label.pack(anchor="w")
+        ctk.CTkLabel(price_row, text="→", font=ctk.CTkFont(size=14), text_color=MUTED).pack(side="left")
+        current_cell = ctk.CTkFrame(price_row, fg_color="transparent")
+        current_cell.pack(side="left", expand=True, fill="x", padx=14, pady=10)
+        ctk.CTkLabel(current_cell, text="Current Price", font=ctk.CTkFont(size=10), text_color=MUTED).pack(anchor="w")
+        self.detail_current_price_label = ctk.CTkLabel(current_cell, text="—",
+                                                         font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT)
+        self.detail_current_price_label.pack(anchor="w")
 
-        sep1 = ctk.CTkFrame(panel, height=1, fg_color=BORDER)
-        sep1.pack(fill="x", padx=18)
+        # --- Breakeven ---
+        be_section = ctk.CTkFrame(card, fg_color="transparent")
+        be_section.pack(fill="x", padx=18, pady=(0, 14))
+        ctk.CTkLabel(be_section, text="BREAKEVEN", font=ctk.CTkFont(size=10, weight="bold"),
+                     text_color=MUTED).pack(anchor="w", pady=(0, 6))
+
+        toggle_row = ctk.CTkFrame(be_section, fg_color=CARD_ALT, corner_radius=8)
+        toggle_row.pack(fill="x")
+        self.be_exact_toggle = ctk.CTkButton(toggle_row, text="Exact (BE)", height=30,
+                                              fg_color=BLUE, hover_color=BLUE_HOVER, text_color=TEXT,
+                                              command=lambda: self._set_be_mode("exact"))
+        self.be_exact_toggle.pack(side="left", expand=True, fill="x", padx=(4, 2), pady=4)
+        self.be_pips_toggle = ctk.CTkButton(toggle_row, text="+ Pips", height=30,
+                                             fg_color="transparent", hover_color=BORDER, text_color=MUTED,
+                                             command=lambda: self._set_be_mode("pips"))
+        self.be_pips_toggle.pack(side="left", expand=True, fill="x", padx=(2, 4), pady=4)
+
+        ctk.CTkLabel(be_section, text="Offset", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
+            anchor="w", pady=(10, 4))
+        offset_line = ctk.CTkFrame(be_section, fg_color="transparent")
+        offset_line.pack(fill="x")
+        self.pips_offset_frame, self.pips_offset_entry = self._make_number_field(
+            offset_line, width=50, step=1.0, decimals=1, default="5")
+        self.pips_offset_frame.pack(side="left")
+        self.pips_offset_entry.bind("<KeyRelease>", self._on_pips_entry_change)
+        ctk.CTkLabel(offset_line, text="pips", font=ctk.CTkFont(size=11), text_color=MUTED).pack(
+            side="left", padx=(8, 12))
+        self.be_apply_btn = ctk.CTkButton(offset_line, text="Apply", height=32, width=70,
+                                           fg_color=BLUE, hover_color=BLUE_HOVER,
+                                           command=self._on_breakeven_apply)
+        self.be_apply_btn.pack(side="left")
+
+        self.be_preview_frame = ctk.CTkFrame(be_section, fg_color=CARD_ALT, corner_radius=8)
+        self.be_preview_frame.pack(fill="x", pady=(10, 0))
+        ctk.CTkLabel(self.be_preview_frame, text="New SL if applied:", font=ctk.CTkFont(size=10),
+                     text_color=MUTED).pack(anchor="w", padx=12, pady=(8, 0))
+        self.be_preview_value = ctk.CTkLabel(self.be_preview_frame, text="—",
+                                              font=ctk.CTkFont(size=13, weight="bold"), text_color=GREEN)
+        self.be_preview_value.pack(anchor="w", padx=12, pady=(0, 8))
+
+        # --- Stop Loss / Take Profit ---
+        sltp_row = ctk.CTkFrame(card, fg_color="transparent")
+        sltp_row.pack(fill="x", padx=18, pady=(0, 12))
+
+        sl_box = ctk.CTkFrame(sltp_row, fg_color=CARD_ALT, corner_radius=10)
+        sl_box.pack(side="left", expand=True, fill="both", padx=(0, 6))
+        ctk.CTkLabel(sl_box, text="STOP LOSS", font=ctk.CTkFont(size=10, weight="bold"),
+                     text_color=RED).pack(anchor="w", padx=12, pady=(10, 6))
+        sl_line = ctk.CTkFrame(sl_box, fg_color="transparent")
+        sl_line.pack(fill="x", padx=12)
+        self.sl_field_frame, self.sl_entry = self._make_number_field(sl_line, width=80, step=0.1, decimals=5)
+        self.sl_field_frame.pack(side="left")
+        self.sl_entry.bind("<KeyRelease>", self._update_risk_reward)
+        self.set_sl_btn = ctk.CTkButton(sl_line, text="Set SL", width=64, height=30,
+                                         fg_color=BLUE, hover_color=BLUE_HOVER, command=self._on_set_sl)
+        self.set_sl_btn.pack(side="left", padx=(6, 0))
+        ctk.CTkLabel(sl_box, text="Current SL:", font=ctk.CTkFont(size=9), text_color=MUTED).pack(
+            anchor="w", padx=12, pady=(10, 0))
+        self.current_sl_label = ctk.CTkLabel(sl_box, text="—", font=ctk.CTkFont(size=11), text_color=TEXT)
+        self.current_sl_label.pack(anchor="w", padx=12, pady=(0, 10))
+
+        tp_box = ctk.CTkFrame(sltp_row, fg_color=CARD_ALT, corner_radius=10)
+        tp_box.pack(side="left", expand=True, fill="both", padx=(6, 0))
+        ctk.CTkLabel(tp_box, text="TAKE PROFIT", font=ctk.CTkFont(size=10, weight="bold"),
+                     text_color=GREEN).pack(anchor="w", padx=12, pady=(10, 6))
+        tp_line = ctk.CTkFrame(tp_box, fg_color="transparent")
+        tp_line.pack(fill="x", padx=12)
+        self.tp_field_frame, self.tp_entry = self._make_number_field(tp_line, width=80, step=0.1, decimals=5)
+        self.tp_field_frame.pack(side="left")
+        self.tp_entry.bind("<KeyRelease>", self._update_risk_reward)
+        self.set_tp_btn = ctk.CTkButton(tp_line, text="Set TP", width=64, height=30,
+                                         fg_color=BLUE, hover_color=BLUE_HOVER, command=self._on_set_tp)
+        self.set_tp_btn.pack(side="left", padx=(6, 0))
+        ctk.CTkLabel(tp_box, text="Current TP:", font=ctk.CTkFont(size=9), text_color=MUTED).pack(
+            anchor="w", padx=12, pady=(10, 0))
+        self.current_tp_label = ctk.CTkLabel(tp_box, text="—", font=ctk.CTkFont(size=11), text_color=TEXT)
+        self.current_tp_label.pack(anchor="w", padx=12, pady=(0, 10))
+
+        rr_row = ctk.CTkFrame(card, fg_color="transparent")
+        rr_row.pack(fill="x", padx=18, pady=(0, 12))
+        ctk.CTkLabel(rr_row, text="Risk / Reward (est.):", font=ctk.CTkFont(size=11),
+                     text_color=MUTED).pack(side="left")
+        self.rr_value_label = ctk.CTkLabel(rr_row, text="—", font=ctk.CTkFont(size=12, weight="bold"),
+                                            text_color=TEXT)
+        self.rr_value_label.pack(side="left", padx=(6, 0))
+        self.validated_label = ctk.CTkLabel(rr_row, text="", font=ctk.CTkFont(size=10), text_color=MUTED)
+        self.validated_label.pack(side="right")
 
         # --- Close position ---
-        close_section = ctk.CTkFrame(panel, fg_color="transparent")
-        close_section.pack(fill="x", padx=18, pady=12)
-
+        close_section = ctk.CTkFrame(card, fg_color="transparent")
+        close_section.pack(fill="x", padx=18, pady=(0, 14))
         ctk.CTkLabel(close_section, text="CLOSE POSITION", font=ctk.CTkFont(size=10, weight="bold"),
                      text_color=MUTED).pack(anchor="w", pady=(0, 8))
-
-        close_row = ctk.CTkFrame(close_section, fg_color="transparent")
-        close_row.pack(fill="x")
-
-        self.half_close_btn = ctk.CTkButton(close_row, text="Half Close", width=140, height=36,
-                                             fg_color=ACCENT, hover_color=ACCENT_HOVER,
+        close_btn_row = ctk.CTkFrame(close_section, fg_color="transparent")
+        close_btn_row.pack(fill="x")
+        self.half_close_btn = ctk.CTkButton(close_btn_row, text="Half Close (50%)", height=34,
+                                             fg_color=CARD_ALT, hover_color=BORDER, text_color=TEXT,
+                                             border_width=1, border_color=BORDER,
                                              command=self._on_half_close)
-        self.half_close_btn.pack(side="left", padx=(0, 10))
-
-        self.full_close_btn = ctk.CTkButton(close_row, text="Full Close", width=140, height=36,
-                                             command=self._on_full_close,
-                                             fg_color=DANGER, hover_color=DANGER_HOVER)
-        self.full_close_btn.pack(side="left", padx=(0, 18))
+        self.half_close_btn.pack(side="left", expand=True, fill="x", padx=(0, 6))
+        self.full_close_btn = ctk.CTkButton(close_btn_row, text="Full Close", height=34,
+                                             fg_color=RED, hover_color="#dc2626",
+                                             command=self._on_full_close)
+        self.full_close_btn.pack(side="left", expand=True, fill="x", padx=(6, 0))
 
         self.skip_confirm_var = tk.BooleanVar(value=False)
         self.skip_confirm_check = ctk.CTkCheckBox(
-            close_row, text="Don't ask me again before closing a trade",
-            variable=self.skip_confirm_var, font=ctk.CTkFont(size=11), text_color=TEXT,
-            fg_color=ACCENT, hover_color=ACCENT_HOVER, border_color=BORDER,
-            checkbox_width=18, checkbox_height=18)
-        self.skip_confirm_check.pack(side="left")
+            close_section, text="Don't ask me again before closing a trade",
+            variable=self.skip_confirm_var, font=ctk.CTkFont(size=10), text_color=MUTED,
+            fg_color=BLUE, hover_color=BLUE_HOVER, border_color=BORDER,
+            checkbox_width=16, checkbox_height=16)
+        self.skip_confirm_check.pack(anchor="w", pady=(10, 0))
 
-        sep2 = ctk.CTkFrame(panel, height=1, fg_color=BORDER)
-        sep2.pack(fill="x", padx=18)
-
-        # --- Custom SL / TP ---
-        sltp_section = ctk.CTkFrame(panel, fg_color="transparent")
-        sltp_section.pack(fill="x", padx=18, pady=(12, 18))
-
-        ctk.CTkLabel(sltp_section, text="CUSTOM SL / TP", font=ctk.CTkFont(size=10, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", pady=(0, 8))
-
-        sltp_row = ctk.CTkFrame(sltp_section, fg_color="transparent")
-        sltp_row.pack(fill="x")
-
-        ctk.CTkLabel(sltp_row, text="SL", font=ctk.CTkFont(size=12),
-                     text_color=TEXT).pack(side="left", padx=(0, 6))
-        self.sl_entry = ctk.CTkEntry(sltp_row, width=130, height=36, border_color=BORDER)
-        self.sl_entry.pack(side="left", padx=(0, 20))
-
-        ctk.CTkLabel(sltp_row, text="TP", font=ctk.CTkFont(size=12),
-                     text_color=TEXT).pack(side="left", padx=(0, 6))
-        self.tp_entry = ctk.CTkEntry(sltp_row, width=130, height=36, border_color=BORDER)
-        self.tp_entry.pack(side="left", padx=(0, 20))
-
-        self.apply_sltp_btn = ctk.CTkButton(sltp_row, text="Apply SL/TP", width=140, height=36,
-                                             fg_color=ACCENT, hover_color=ACCENT_HOVER,
-                                             command=self._on_apply_sltp)
-        self.apply_sltp_btn.pack(side="left")
+        self.detail_result_banner = ctk.CTkFrame(card, corner_radius=8, fg_color=CARD)
+        self.detail_result_banner.pack(fill="x", padx=18, pady=(0, 16))
+        self.detail_result_label = ctk.CTkLabel(self.detail_result_banner, text="",
+                                                  font=ctk.CTkFont(size=11, weight="bold"), anchor="w")
+        self.detail_result_label.pack(anchor="w", padx=12, pady=6)
 
         self.action_widgets = [
-            self.be_exact_btn, self.pips_entry, self.be_pips_btn,
+            self.be_exact_toggle, self.be_pips_toggle, self.pips_offset_entry, self.be_apply_btn,
+            self.sl_entry, self.set_sl_btn, self.tp_entry, self.set_tp_btn,
             self.half_close_btn, self.full_close_btn,
-            self.sl_entry, self.tp_entry, self.apply_sltp_btn,
         ]
         self._set_action_panel_enabled(False)
+        self._clear_detail_header()
 
-    def _set_result(self, text: str, tone: str = "neutral"):
-        bg, fg = _RESULT_STYLES.get(tone, _RESULT_STYLES["neutral"])
-        self.result_banner.configure(fg_color=bg if text else BG)
-        self.result_label.configure(text=text, text_color=fg)
+    def _build_footer(self, root):
+        bar = ctk.CTkFrame(root, fg_color="transparent")
+        bar.pack(fill="x", padx=20, pady=(0, 16))
+        self.footer_time_label = ctk.CTkLabel(bar, text="Last Update: —", font=ctk.CTkFont(size=10),
+                                               text_color=MUTED)
+        self.footer_time_label.pack(side="left")
+        self.footer_ping_label = ctk.CTkLabel(bar, text="Ping: —", font=ctk.CTkFont(size=10),
+                                               text_color=MUTED)
+        self.footer_ping_label.pack(side="left", padx=(16, 0))
+        ctk.CTkLabel(bar, text="MT5 Trade Manager", font=ctk.CTkFont(size=10),
+                     text_color=MUTED).pack(side="right")
+
+    # ------------------------------------------------------------------
+    # Connection / lifecycle
+    # ------------------------------------------------------------------
 
     def _on_close(self):
         for job in (self._refresh_job, self._reconnect_job):
@@ -271,9 +456,9 @@ class TradeManagerApp:
         self.root.destroy()
 
     def _set_status(self, text: str, tone: str):
-        bg, fg = _RESULT_STYLES.get(tone, _RESULT_STYLES["neutral"])
+        bg, fg = _TONE_STYLES.get(tone, _TONE_STYLES["neutral"])
         self.status_badge.configure(fg_color=bg)
-        self.status_label.configure(text=text, text_color=fg)
+        self.status_label.configure(text=f"● {text}", text_color=fg)
 
     def _try_connect(self):
         try:
@@ -283,41 +468,59 @@ class TradeManagerApp:
 
         if ok:
             self.connected = True
-            try:
-                account = self.mt5.account_info()
-                login = account.login if account else "?"
-            except Exception:
-                login = "?"
-            self._set_status(f"● Connected — account {login}", "success")
+            self._refresh_account_info()
         else:
             self.connected = False
-            self._set_status("● MT5 not connected — open and log into MetaTrader 5", "error")
+            self._set_status("MT5 Disconnected", "error")
             self._reconnect_job = self.root.after(self.RECONNECT_MS, self._try_connect)
 
     def _refresh_loop(self):
         if self.connected:
-            self._refresh_account_banner()
+            self._refresh_account_info()
             self._refresh_positions()
         self._refresh_job = self.root.after(self.REFRESH_MS, self._refresh_loop)
 
-    def _refresh_account_banner(self):
-        """Keeps the account number in the status badge accurate if the user
-        switches accounts inside MT5 without closing/reopening the terminal.
-        _try_connect() only sets this once, at initial connect, so without
-        this the badge would keep showing the OLD account's login number
-        even though positions_get() below is already correctly reflecting
-        whichever account MT5 currently has active."""
+    def _refresh_account_info(self):
+        """Refreshes the connection badge, account chip, and account-overview
+        stats every tick -- not just at initial connect -- so switching
+        accounts inside MT5 without restarting the app is reflected
+        immediately instead of leaving stale figures on screen."""
         try:
             account = self.mt5.account_info()
-            login = account.login if account else "?"
         except Exception:
-            login = "?"
-        self._set_status(f"● Connected — account {login}", "success")
+            account = None
+
+        self._set_status("MT5 Connected", "success")
+        self.account_number_label.configure(text=str(account.login) if account else "—")
+
+        if account:
+            self.balance_value.configure(text=f"${account.balance:,.2f}")
+            self.equity_value.configure(text=f"${account.equity:,.2f}")
+            self.margin_value.configure(text=f"${account.margin:,.2f}")
+            self.free_margin_value.configure(text=f"${account.margin_free:,.2f}")
+            profit = account.profit
+            pct = (profit / account.balance * 100) if account.balance else 0.0
+            tone = GREEN if profit >= 0 else RED
+            self.profit_value.configure(text=f"{'+' if profit >= 0 else ''}${profit:,.2f}", text_color=tone)
+            self.profit_pct_value.configure(
+                text=f"({'+' if pct >= 0 else ''}{pct:.2f}%)", text_color=tone)
+
+        try:
+            terminal = self.mt5.terminal_info()
+            ping = getattr(terminal, "ping_last", None) if terminal else None
+            if ping:
+                self.footer_ping_label.configure(text=f"Ping: {ping / 1000:.0f} ms")
+        except Exception:
+            pass
 
     def _handle_connection_lost(self):
         self.connected = False
-        self._set_status("● MT5 not connected — open and log into MetaTrader 5", "error")
+        self._set_status("MT5 Disconnected", "error")
         self._reconnect_job = self.root.after(self.RECONNECT_MS, self._try_connect)
+
+    # ------------------------------------------------------------------
+    # Positions table
+    # ------------------------------------------------------------------
 
     def _refresh_positions(self):
         try:
@@ -339,7 +542,7 @@ class TradeManagerApp:
         # periodic refresh never re-fires <<TreeviewSelect>> for the row the
         # user already has selected -- deleting and re-adding an item counts
         # as a new selection to tkinter, which would otherwise clobber
-        # whatever the user is mid-typing in the SL/TP fields every 2 seconds.
+        # whatever the user is mid-typing in the SL/TP fields.
         current_iids = set(self.tree.get_children())
         new_iids = {str(p.ticket) for p in positions}
 
@@ -348,9 +551,10 @@ class TradeManagerApp:
 
         for p in positions:
             direction = "BUY" if p.type == self.mt5.POSITION_TYPE_BUY else "SELL"
+            pips_text = self._pips_text(p, direction)
             values = (p.symbol, direction, p.volume,
                       f"{p.price_open:.5f}", f"{p.price_current:.5f}",
-                      f"{p.profit:.2f}", f"{p.sl:.5f}", f"{p.tp:.5f}")
+                      f"{p.profit:.2f}", pips_text, f"{p.sl:.5f}", f"{p.tp:.5f}")
             iid = str(p.ticket)
             if iid in current_iids:
                 self.tree.item(iid, values=values)
@@ -360,16 +564,45 @@ class TradeManagerApp:
         if self.selected_ticket not in self.positions_by_ticket:
             self.selected_ticket = None
             self._set_action_panel_enabled(False)
+            self._clear_detail_header()
+        else:
+            self._update_detail_header(self.positions_by_ticket[self.selected_ticket])
+
+        self.positions_title.configure(text=f"OPEN POSITIONS ({len(positions)})")
+        self.position_count_value.configure(text=str(len(positions)))
+        if self.selected_ticket is not None:
+            self.active_symbol_value.configure(text=self.positions_by_ticket[self.selected_ticket].symbol)
+        else:
+            self.active_symbol_value.configure(text="—")
+
+        total_pl = sum(p.profit for p in positions)
+        tone_color = GREEN if total_pl >= 0 else (RED if positions else MUTED)
+        self.table_summary_label.configure(
+            text=f"{len(positions)} position(s)  •  Total P/L: {'+' if total_pl >= 0 else ''}${total_pl:.2f}",
+            text_color=tone_color)
+        self.footer_time_label.configure(text=f"Last Update: {datetime.now().strftime('%H:%M:%S')}")
+
+    def _pips_text(self, position, direction: str) -> str:
+        try:
+            symbol_info = self.mt5.symbol_info(position.symbol)
+            ps = _pip_size(symbol_info)
+            pips = (position.price_current - position.price_open) / ps
+            if direction == "SELL":
+                pips = -pips
+            return f"{'+' if pips >= 0 else ''}{pips:.1f}"
+        except Exception:
+            return "—"
 
     def _on_select(self, event):
         selection = self.tree.selection()
         if not selection:
             self.selected_ticket = None
             self._set_action_panel_enabled(False)
+            self._clear_detail_header()
             return
         self.selected_ticket = int(selection[0])
         self._set_action_panel_enabled(True)
-        self._set_result("", "neutral")
+        self._set_detail_result("", "neutral")
         position = self.positions_by_ticket[self.selected_ticket]
         self.sl_entry.delete(0, tk.END)
         if position.sl:
@@ -377,6 +610,47 @@ class TradeManagerApp:
         self.tp_entry.delete(0, tk.END)
         if position.tp:
             self.tp_entry.insert(0, f"{position.tp:.5f}")
+        self._update_detail_header(position)
+
+    # ------------------------------------------------------------------
+    # Detail panel state
+    # ------------------------------------------------------------------
+
+    def _clear_detail_header(self):
+        self.detail_symbol_label.configure(text="No position selected")
+        self.detail_direction_badge.configure(fg_color=CARD_ALT)
+        self.detail_direction_label.configure(text="", text_color=MUTED)
+        self.detail_lots_label.configure(text="— lots")
+        self.detail_pl_label.configure(text="")
+        self.detail_pl_pips_label.configure(text="")
+        self.detail_entry_price_label.configure(text="—")
+        self.detail_current_price_label.configure(text="—")
+        self.current_sl_label.configure(text="—")
+        self.current_tp_label.configure(text="—")
+        self.validated_label.configure(text="")
+        self.be_preview_value.configure(text="—")
+        self.rr_value_label.configure(text="—")
+
+    def _update_detail_header(self, position):
+        direction = "BUY" if position.type == self.mt5.POSITION_TYPE_BUY else "SELL"
+        self.detail_symbol_label.configure(text=position.symbol)
+        self.detail_direction_badge.configure(fg_color=GREEN_BG if direction == "BUY" else RED_BG)
+        self.detail_direction_label.configure(text=direction, text_color=GREEN if direction == "BUY" else RED)
+        self.detail_lots_label.configure(text=f"{position.volume} lots")
+
+        profit = position.profit
+        tone = GREEN if profit >= 0 else RED
+        self.detail_pl_label.configure(text=f"{'+' if profit >= 0 else ''}${profit:.2f}", text_color=tone)
+        self.detail_pl_pips_label.configure(text=f"({self._pips_text(position, direction)} pips)")
+
+        self.detail_entry_price_label.configure(text=f"{position.price_open:.5f}")
+        self.detail_current_price_label.configure(text=f"{position.price_current:.5f}")
+        self.current_sl_label.configure(text=f"{position.sl:.5f}" if position.sl else "—")
+        self.current_tp_label.configure(text=f"{position.tp:.5f}" if position.tp else "—")
+        self.validated_label.configure(text=f"Validated for {direction} position")
+
+        self._update_be_preview()
+        self._update_risk_reward()
 
     def _set_action_panel_enabled(self, enabled: bool):
         self._panel_enabled = enabled
@@ -384,16 +658,71 @@ class TradeManagerApp:
         for widget in self.action_widgets:
             widget.configure(state=state)
         if enabled:
-            self._on_pips_entry_change(None)  # re-evaluate pips-button state for the new selection
+            self._on_pips_entry_change(None)  # re-evaluate Apply-button state for the new selection
+
+    def _set_be_mode(self, mode: str):
+        self.be_mode = mode
+        if mode == "exact":
+            self.be_exact_toggle.configure(fg_color=BLUE, text_color=TEXT, hover_color=BLUE_HOVER)
+            self.be_pips_toggle.configure(fg_color="transparent", text_color=MUTED, hover_color=BORDER)
+        else:
+            self.be_pips_toggle.configure(fg_color=BLUE, text_color=TEXT, hover_color=BLUE_HOVER)
+            self.be_exact_toggle.configure(fg_color="transparent", text_color=MUTED, hover_color=BORDER)
+        self._on_pips_entry_change(None)
 
     def _on_pips_entry_change(self, event):
-        value = self.pips_entry.get().strip()
+        self._update_be_preview()
+        if self.be_mode == "pips":
+            try:
+                pips = float(self.pips_offset_entry.get().strip())
+                valid = pips > 0
+            except ValueError:
+                valid = False
+            self.be_apply_btn.configure(state="normal" if (valid and self._panel_enabled) else "disabled")
+        else:
+            self.be_apply_btn.configure(state="normal" if self._panel_enabled else "disabled")
+
+    def _update_be_preview(self):
+        position = self.positions_by_ticket.get(self.selected_ticket) if self.selected_ticket else None
+        if position is None:
+            self.be_preview_value.configure(text="—")
+            return
         try:
-            pips = float(value)
-            valid = pips > 0
+            symbol_info = self.mt5.symbol_info(position.symbol)
+            direction = "BUY" if position.type == self.mt5.POSITION_TYPE_BUY else "SELL"
+            pips = 0.0
+            if self.be_mode == "pips":
+                pips = float(self.pips_offset_entry.get().strip() or 0)
+            new_sl = _breakeven_price(direction, position.price_open, _pip_size(symbol_info), pips)
+            self.be_preview_value.configure(text=f"{new_sl:.5f}")
+        except Exception:
+            self.be_preview_value.configure(text="—")
+
+    def _update_risk_reward(self, event=None):
+        position = self.positions_by_ticket.get(self.selected_ticket) if self.selected_ticket else None
+        if position is None:
+            self.rr_value_label.configure(text="—")
+            return
+        try:
+            sl = float(self.sl_entry.get().strip())
+            tp = float(self.tp_entry.get().strip())
+            risk = abs(position.price_open - sl)
+            reward = abs(tp - position.price_open)
+            if risk <= 0:
+                self.rr_value_label.configure(text="—")
+                return
+            self.rr_value_label.configure(text=f"1 : {reward / risk:.2f}")
         except ValueError:
-            valid = False
-        self.be_pips_btn.configure(state="normal" if (valid and self._panel_enabled) else "disabled")
+            self.rr_value_label.configure(text="—")
+
+    def _set_detail_result(self, text: str, tone: str = "neutral"):
+        bg, fg = _TONE_STYLES.get(tone, _TONE_STYLES["neutral"])
+        self.detail_result_banner.configure(fg_color=bg if text else CARD)
+        self.detail_result_label.configure(text=text, text_color=fg)
+
+    # ------------------------------------------------------------------
+    # Actions
+    # ------------------------------------------------------------------
 
     def _get_live_position(self, ticket):
         """Re-fetches the position directly from MT5 by ticket, rather than
@@ -413,68 +742,103 @@ class TradeManagerApp:
 
     def _show_result(self, result, success_message="Done."):
         if result is None:
-            self._set_result("Action could not be completed.", "error")
+            self._set_detail_result("Action could not be completed.", "error")
             return
         if result.retcode == self.mt5.TRADE_RETCODE_DONE:
-            self._set_result(success_message, "success")
+            self._set_detail_result(success_message, "success")
         elif result.retcode == self.mt5.TRADE_RETCODE_DONE_PARTIAL:
-            self._set_result(
+            self._set_detail_result(
                 f"Partially filled — {success_message} Check remaining volume before retrying.",
                 "warning")
         else:
-            self._set_result(
+            self._set_detail_result(
                 f"Broker rejected: {result.retcode} {getattr(result, 'comment', '')}", "error")
 
-    def _on_breakeven_exact(self):
+    def _on_breakeven_apply(self):
         if self.selected_ticket is None:
             return
+        pips = 0.0
+        if self.be_mode == "pips":
+            try:
+                pips = float(self.pips_offset_entry.get().strip())
+            except ValueError:
+                self._set_detail_result("Enter a valid positive pip value first.", "error")
+                return
+            if pips <= 0:
+                self._set_detail_result("Pips must be a positive number.", "error")
+                return
         position = self._get_live_position(self.selected_ticket)
         if position is None:
-            self._set_result("Position no longer open.", "error")
-            return
-        try:
-            result = apply_breakeven(self.mt5, position, pips=0.0)
-        except Exception:
-            self._set_result("Action failed (MT5 error).", "error")
-            return
-        self._show_result(result, "SL moved to breakeven.")
-
-    def _on_breakeven_pips(self):
-        if self.selected_ticket is None:
-            return
-        try:
-            pips = float(self.pips_entry.get().strip())
-        except ValueError:
-            self._set_result("Enter a valid positive pip value first.", "error")
-            return
-        if pips <= 0:
-            self._set_result("Pips must be a positive number.", "error")
-            return
-        position = self._get_live_position(self.selected_ticket)
-        if position is None:
-            self._set_result("Position no longer open.", "error")
+            self._set_detail_result("Position no longer open.", "error")
             return
         try:
             result = apply_breakeven(self.mt5, position, pips=pips)
         except Exception:
-            self._set_result("Action failed (MT5 error).", "error")
+            self._set_detail_result("Action failed (MT5 error).", "error")
             return
-        self._show_result(result, f"SL moved to breakeven +{pips:g} pips.")
+        msg = "SL moved to breakeven." if pips == 0 else f"SL moved to breakeven +{pips:g} pips."
+        self._show_result(result, msg)
+
+    def _on_set_sl(self):
+        if self.selected_ticket is None:
+            return
+        sl_text = self.sl_entry.get().strip()
+        try:
+            sl = float(sl_text) if sl_text else None
+        except ValueError:
+            self._set_detail_result("SL must be a number.", "error")
+            return
+        position = self._get_live_position(self.selected_ticket)
+        if position is None:
+            self._set_detail_result("Position no longer open.", "error")
+            return
+        try:
+            result, error = apply_custom_sltp(self.mt5, position, sl, None)
+        except Exception:
+            self._set_detail_result("Action failed (MT5 error).", "error")
+            return
+        if error:
+            self._set_detail_result(error, "error")
+            return
+        self._show_result(result, "Stop loss updated.")
+
+    def _on_set_tp(self):
+        if self.selected_ticket is None:
+            return
+        tp_text = self.tp_entry.get().strip()
+        try:
+            tp = float(tp_text) if tp_text else None
+        except ValueError:
+            self._set_detail_result("TP must be a number.", "error")
+            return
+        position = self._get_live_position(self.selected_ticket)
+        if position is None:
+            self._set_detail_result("Position no longer open.", "error")
+            return
+        try:
+            result, error = apply_custom_sltp(self.mt5, position, None, tp)
+        except Exception:
+            self._set_detail_result("Action failed (MT5 error).", "error")
+            return
+        if error:
+            self._set_detail_result(error, "error")
+            return
+        self._show_result(result, "Take profit updated.")
 
     def _on_half_close(self):
         if self.selected_ticket is None:
             return
         position = self._get_live_position(self.selected_ticket)
         if position is None:
-            self._set_result("Position no longer open.", "error")
+            self._set_detail_result("Position no longer open.", "error")
             return
         try:
             result = half_close(self.mt5, position)
         except Exception:
-            self._set_result("Action failed (MT5 error).", "error")
+            self._set_detail_result("Action failed (MT5 error).", "error")
             return
         if result is None:
-            self._set_result(
+            self._set_detail_result(
                 "Cannot half-close: half the volume is below the broker's minimum lot.", "error")
             return
         self._show_result(result, "Half of the position closed.")
@@ -485,7 +849,7 @@ class TradeManagerApp:
         ticket = self.selected_ticket
         position = self._get_live_position(ticket)
         if position is None:
-            self._set_result("Position no longer open.", "error")
+            self._set_detail_result("Position no longer open.", "error")
             return
         direction = "BUY" if position.type == self.mt5.POSITION_TYPE_BUY else "SELL"
         if not self.skip_confirm_var.get():
@@ -502,37 +866,12 @@ class TradeManagerApp:
         # time still passes between selecting the row and clicking Close.
         position = self._get_live_position(ticket)
         if position is None:
-            self._set_result(
+            self._set_detail_result(
                 "Position closed before the close order was sent -- no action taken.", "error")
             return
         try:
             result = full_close(self.mt5, position)
         except Exception:
-            self._set_result("Action failed (MT5 error).", "error")
+            self._set_detail_result("Action failed (MT5 error).", "error")
             return
         self._show_result(result, "Position closed.")
-
-    def _on_apply_sltp(self):
-        if self.selected_ticket is None:
-            return
-        sl_text = self.sl_entry.get().strip()
-        tp_text = self.tp_entry.get().strip()
-        try:
-            sl = float(sl_text) if sl_text else None
-            tp = float(tp_text) if tp_text else None
-        except ValueError:
-            self._set_result("SL/TP must be numbers.", "error")
-            return
-        position = self._get_live_position(self.selected_ticket)
-        if position is None:
-            self._set_result("Position no longer open.", "error")
-            return
-        try:
-            result, error = apply_custom_sltp(self.mt5, position, sl, tp)
-        except Exception:
-            self._set_result("Action failed (MT5 error).", "error")
-            return
-        if error:
-            self._set_result(error, "error")
-            return
-        self._show_result(result, "SL/TP updated.")

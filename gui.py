@@ -9,6 +9,7 @@ from PIL import Image
 import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.ticker import FuncFormatter
 from actions import apply_breakeven, half_close, full_close, apply_custom_sltp
 from trade_logic import pip_size as _pip_size, breakeven_price as _breakeven_price
 
@@ -584,18 +585,35 @@ class TradeManagerApp:
 
         self._draw_candles(rates)
 
-        # Dotted line + price tag at the position's current price, so the
-        # user can see exactly where the next candle will open relative to
-        # the visible history, matching how MT5/TradingView mark live price.
-        position = self.positions_by_ticket.get(self.selected_ticket)
-        if position is not None:
-            current_price = position.price_current
-            self.chart_ax.axhline(y=current_price, color=BLUE, linestyle=(0, (4, 3)), linewidth=1)
-            self.chart_ax.annotate(
-                f"{current_price:.5f}", xy=(1, current_price), xycoords=("axes fraction", "data"),
-                xytext=(4, 0), textcoords="offset points", va="center", ha="left",
-                color=BG, fontsize=8, fontweight="bold", annotation_clip=False,
-                bbox=dict(boxstyle="round,pad=0.25", fc=BLUE, ec="none"))
+        try:
+            symbol_info = self.mt5.symbol_info(symbol)
+            digits = symbol_info.digits if symbol_info else 2
+        except Exception:
+            digits = 2
+        # Comma-separated, symbol-accurate decimals on the price axis
+        # (e.g. "4,436.00" for Gold), matching the reference chart's style.
+        self.chart_ax.yaxis.set_major_formatter(FuncFormatter(lambda x, pos, d=digits: f"{x:,.{d}f}"))
+
+        # Dotted line + price tag anchored to the LAST CANDLE's own close
+        # (not the live position price, which can differ slightly from the
+        # chart due to bid/ask spread) -- colored by whether that candle
+        # closed up or down, with its timestamp, matching TradingView/MT5's
+        # own current-price marker.
+        last = rates[-1]
+        last_close = float(last["close"])
+        last_open = float(last["open"])
+        tag_color = GREEN if last_close >= last_open else RED
+        try:
+            last_time = datetime.fromtimestamp(int(last["time"])).strftime("%H:%M")
+        except Exception:
+            last_time = ""
+
+        self.chart_ax.axhline(y=last_close, color=tag_color, linestyle=(0, (4, 3)), linewidth=1)
+        self.chart_ax.annotate(
+            f"{last_close:,.{digits}f}\n{last_time}", xy=(1, last_close), xycoords=("axes fraction", "data"),
+            xytext=(4, 0), textcoords="offset points", va="center", ha="left",
+            color=BG, fontsize=8, fontweight="bold", linespacing=1.4, annotation_clip=False,
+            bbox=dict(boxstyle="round,pad=0.35", fc=tag_color, ec="none"))
 
         self.chart_title_label.configure(text=f"LIVE CHART — {symbol} ({self.chart_timeframe})")
         self.chart_canvas.draw_idle()

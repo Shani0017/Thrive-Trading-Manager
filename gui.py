@@ -1,7 +1,10 @@
+import os
+import sys
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
+from PIL import Image
 from actions import apply_breakeven, half_close, full_close, apply_custom_sltp
 
 ctk.set_appearance_mode("dark")
@@ -13,26 +16,50 @@ AMBER = "#d6a419"
 MUTED = "#9aa0a6"
 
 
+def _resource_path(relative_path: str) -> str:
+    """Resolves a bundled asset both in normal dev runs and inside a
+    PyInstaller onefile .exe, where bundled data lives under a temporary
+    _MEIPASS extraction directory instead of next to this script."""
+    base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
+
 class TradeManagerApp:
-    REFRESH_MS = 2000
+    # How often the app polls MT5 for open-position updates. MT5's Python API
+    # has no push/subscribe mechanism -- positions_get() must be polled -- so
+    # some delay is unavoidable, but 2s was needlessly cautious for how cheap
+    # a single positions_get() call + table refresh actually is. 500ms keeps
+    # the table visually near-instant without hammering the terminal's IPC
+    # layer on every UI frame.
+    REFRESH_MS = 500
     RECONNECT_MS = 5000
 
     def __init__(self, root, mt5):
         self.root = root
         self.mt5 = mt5
         self.root.title("MT5 Trade Manager")
-        self.root.geometry("940x560")
-        self.root.minsize(860, 520)
+        self.root.geometry("940x600")
+        self.root.minsize(860, 560)
         self.connected = False
         self.selected_ticket = None
         self.positions_by_ticket = {}
         self._refresh_job = None
         self._reconnect_job = None
 
-        self.status_label = ctk.CTkLabel(root, text="Connecting to MT5...",
+        header = ctk.CTkFrame(root, fg_color="transparent")
+        header.pack(fill="x", padx=18, pady=(16, 0))
+
+        try:
+            logo_img = Image.open(_resource_path("assets/logo.png"))
+            self._logo_image = ctk.CTkImage(logo_img, size=(120, 44))
+            ctk.CTkLabel(header, image=self._logo_image, text="").pack(side="left", padx=(0, 14))
+        except Exception:
+            pass  # missing/unreadable logo must never block the app from starting
+
+        self.status_label = ctk.CTkLabel(header, text="Connecting to MT5...",
                                           font=ctk.CTkFont(size=15, weight="bold"),
                                           anchor="w")
-        self.status_label.pack(fill="x", padx=18, pady=(16, 8))
+        self.status_label.pack(side="left", fill="x", expand=True, pady=8)
 
         table_frame = ctk.CTkFrame(root, corner_radius=12)
         table_frame.pack(fill="both", expand=True, padx=18, pady=8)
@@ -88,47 +115,91 @@ class TradeManagerApp:
         panel.pack(fill="x", padx=18, pady=(0, 8))
 
         ctk.CTkLabel(panel, text="ACTIONS", font=ctk.CTkFont(size=12, weight="bold"),
-                     text_color=MUTED).grid(row=0, column=0, columnspan=6, sticky="w",
-                                             padx=16, pady=(14, 8))
+                     text_color=MUTED).pack(anchor="w", padx=18, pady=(16, 4))
 
-        self.be_exact_btn = ctk.CTkButton(panel, text="Breakeven (Exact)",
+        # --- Stop Loss to Breakeven ---
+        be_section = ctk.CTkFrame(panel, fg_color="transparent")
+        be_section.pack(fill="x", padx=18, pady=(2, 12))
+
+        ctk.CTkLabel(be_section, text="Stop Loss to Breakeven", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color=MUTED).pack(anchor="w", pady=(0, 8))
+
+        be_row = ctk.CTkFrame(be_section, fg_color="transparent")
+        be_row.pack(fill="x")
+
+        self.be_exact_btn = ctk.CTkButton(be_row, text="Breakeven (Exact)", width=170, height=36,
                                            command=self._on_breakeven_exact)
-        self.be_exact_btn.grid(row=1, column=0, padx=(16, 6), pady=(0, 14), sticky="ew")
+        self.be_exact_btn.pack(side="left", padx=(0, 24))
 
-        self.pips_entry = ctk.CTkEntry(panel, width=64, placeholder_text="pips")
-        self.pips_entry.grid(row=1, column=1, padx=6, pady=(0, 14))
+        ctk.CTkLabel(be_row, text="Breakeven +", font=ctk.CTkFont(size=12)).pack(side="left", padx=(0, 6))
+        self.pips_entry = ctk.CTkEntry(be_row, width=70, height=36, placeholder_text="e.g. 5")
+        self.pips_entry.pack(side="left", padx=(0, 6))
         self.pips_entry.bind("<KeyRelease>", self._on_pips_entry_change)
-
-        self.be_pips_btn = ctk.CTkButton(panel, text="Breakeven + Pips",
+        ctk.CTkLabel(be_row, text="pips", font=ctk.CTkFont(size=12), text_color=MUTED).pack(
+            side="left", padx=(0, 12))
+        self.be_pips_btn = ctk.CTkButton(be_row, text="Apply", width=90, height=36,
                                           command=self._on_breakeven_pips)
-        self.be_pips_btn.grid(row=1, column=2, padx=6, pady=(0, 14), sticky="ew")
+        self.be_pips_btn.pack(side="left")
 
-        self.half_close_btn = ctk.CTkButton(panel, text="Half Close",
+        ctk.CTkLabel(be_section,
+                     text="Locks in profit: moves the stop that many pips past your entry price,\n"
+                          "in the direction of the trade, instead of leaving it exactly at entry.",
+                     font=ctk.CTkFont(size=10), text_color=MUTED, justify="left").pack(
+            anchor="w", pady=(8, 0))
+
+        sep1 = ctk.CTkFrame(panel, height=1, fg_color="#3a3a3a")
+        sep1.pack(fill="x", padx=18)
+
+        # --- Close position ---
+        close_section = ctk.CTkFrame(panel, fg_color="transparent")
+        close_section.pack(fill="x", padx=18, pady=12)
+
+        ctk.CTkLabel(close_section, text="Close Position", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color=MUTED).pack(anchor="w", pady=(0, 8))
+
+        close_row = ctk.CTkFrame(close_section, fg_color="transparent")
+        close_row.pack(fill="x")
+
+        self.half_close_btn = ctk.CTkButton(close_row, text="Half Close", width=140, height=36,
                                              command=self._on_half_close)
-        self.half_close_btn.grid(row=1, column=3, padx=6, pady=(0, 14), sticky="ew")
+        self.half_close_btn.pack(side="left", padx=(0, 10))
 
-        self.full_close_btn = ctk.CTkButton(panel, text="Full Close", command=self._on_full_close,
+        self.full_close_btn = ctk.CTkButton(close_row, text="Full Close", width=140, height=36,
+                                             command=self._on_full_close,
                                              fg_color=RED, hover_color="#b03a3e")
-        self.full_close_btn.grid(row=1, column=4, padx=(6, 16), pady=(0, 14), sticky="ew")
+        self.full_close_btn.pack(side="left", padx=(0, 18))
 
-        for col in range(5):
-            panel.grid_columnconfigure(col, weight=1)
+        self.skip_confirm_var = tk.BooleanVar(value=False)
+        self.skip_confirm_check = ctk.CTkCheckBox(
+            close_row, text="Don't ask me again before closing a trade",
+            variable=self.skip_confirm_var, font=ctk.CTkFont(size=11),
+            checkbox_width=18, checkbox_height=18)
+        self.skip_confirm_check.pack(side="left")
 
-        sep = ctk.CTkFrame(panel, height=1, fg_color="#3a3a3a")
-        sep.grid(row=2, column=0, columnspan=6, sticky="ew", padx=16)
+        sep2 = ctk.CTkFrame(panel, height=1, fg_color="#3a3a3a")
+        sep2.pack(fill="x", padx=18)
 
-        ctk.CTkLabel(panel, text="SL", font=ctk.CTkFont(size=11)).grid(
-            row=3, column=0, sticky="e", padx=(16, 4), pady=14)
-        self.sl_entry = ctk.CTkEntry(panel, width=120)
-        self.sl_entry.grid(row=3, column=1, pady=14, sticky="ew")
+        # --- Custom SL / TP ---
+        sltp_section = ctk.CTkFrame(panel, fg_color="transparent")
+        sltp_section.pack(fill="x", padx=18, pady=(12, 18))
 
-        ctk.CTkLabel(panel, text="TP", font=ctk.CTkFont(size=11)).grid(
-            row=3, column=2, sticky="e", padx=(6, 4), pady=14)
-        self.tp_entry = ctk.CTkEntry(panel, width=120)
-        self.tp_entry.grid(row=3, column=3, pady=14, sticky="ew")
+        ctk.CTkLabel(sltp_section, text="Custom SL / TP", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color=MUTED).pack(anchor="w", pady=(0, 8))
 
-        self.apply_sltp_btn = ctk.CTkButton(panel, text="Apply SL/TP", command=self._on_apply_sltp)
-        self.apply_sltp_btn.grid(row=3, column=4, padx=(6, 16), pady=14, sticky="ew")
+        sltp_row = ctk.CTkFrame(sltp_section, fg_color="transparent")
+        sltp_row.pack(fill="x")
+
+        ctk.CTkLabel(sltp_row, text="SL", font=ctk.CTkFont(size=12)).pack(side="left", padx=(0, 6))
+        self.sl_entry = ctk.CTkEntry(sltp_row, width=130, height=36)
+        self.sl_entry.pack(side="left", padx=(0, 20))
+
+        ctk.CTkLabel(sltp_row, text="TP", font=ctk.CTkFont(size=12)).pack(side="left", padx=(0, 6))
+        self.tp_entry = ctk.CTkEntry(sltp_row, width=130, height=36)
+        self.tp_entry.pack(side="left", padx=(0, 20))
+
+        self.apply_sltp_btn = ctk.CTkButton(sltp_row, text="Apply SL/TP", width=140, height=36,
+                                             command=self._on_apply_sltp)
+        self.apply_sltp_btn.pack(side="left")
 
         self.action_widgets = [
             self.be_exact_btn, self.pips_entry, self.be_pips_btn,
@@ -170,8 +241,23 @@ class TradeManagerApp:
 
     def _refresh_loop(self):
         if self.connected:
+            self._refresh_account_banner()
             self._refresh_positions()
         self._refresh_job = self.root.after(self.REFRESH_MS, self._refresh_loop)
+
+    def _refresh_account_banner(self):
+        """Keeps the account number in the status banner accurate if the user
+        switches accounts inside MT5 without closing/reopening the terminal.
+        _try_connect() only sets this once, at initial connect, so without
+        this the banner would keep showing the OLD account's login number
+        even though positions_get() below is already correctly reflecting
+        whichever account MT5 currently has active."""
+        try:
+            account = self.mt5.account_info()
+            login = account.login if account else "?"
+        except Exception:
+            login = "?"
+        self.status_label.configure(text=f"● Connected to MT5 (account {login})", text_color=GREEN)
 
     def _handle_connection_lost(self):
         self.connected = False

@@ -85,6 +85,7 @@ class TradeManagerApp:
 
         self._build_topbar(content)
         self._build_account_overview(content)
+        self._build_chart_panel(content)
 
         split = ctk.CTkFrame(content, fg_color="transparent")
         split.pack(fill="both", expand=True, padx=20, pady=(4, 12))
@@ -107,7 +108,6 @@ class TradeManagerApp:
         self._build_positions_panel(left)
         self._build_detail_panel(right)
 
-        self._build_chart_panel(content)
         self._build_footer(content)
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -204,8 +204,15 @@ class TradeManagerApp:
         return value
 
     def _build_positions_panel(self, root):
+        # Packed with fill="x" only (never "both"/expand=True): the sibling
+        # detail panel needs a large fixed height to avoid clipping its own
+        # content (see the `right` frame above), and since both panels share
+        # the same row, a "both"/expand card here would stretch to match that
+        # height too -- turning a 1-row table into a mostly-empty dark box.
+        # Anchoring to natural content height instead leaves any extra space
+        # as plain page background, not a stretched card.
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="both", expand=True)
+        card.pack(fill="x", anchor="n")
 
         self.positions_title = ctk.CTkLabel(card, text="OPEN POSITIONS (0)",
                                              font=ctk.CTkFont(size=11, weight="bold"), text_color=MUTED)
@@ -221,12 +228,12 @@ class TradeManagerApp:
         }
         widths = {"symbol": 85, "direction": 80, "volume": 65, "entry": 95,
                   "current": 95, "pnl": 85, "pips": 65, "sl": 95, "tp": 95}
-        self.tree = ttk.Treeview(card, columns=columns, show="headings", height=10,
+        self.tree = ttk.Treeview(card, columns=columns, show="headings", height=6,
                                   style="Positions.Treeview")
         for col in columns:
             self.tree.heading(col, text=headings[col])
             self.tree.column(col, width=widths[col], anchor="center", stretch=True)
-        self.tree.pack(fill="both", expand=True, padx=18, pady=(0, 8))
+        self.tree.pack(fill="x", padx=18, pady=(0, 8))
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
         self.table_summary_label = ctk.CTkLabel(card, text="0 position(s)  •  Total P/L: $0.00",

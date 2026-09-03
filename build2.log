@@ -1,0 +1,113 @@
+149 INFO: PyInstaller: 6.19.0, contrib hooks: 2026.3
+150 INFO: Python: 3.11.9
+166 INFO: Platform: Windows-10-10.0.26200-SP0
+166 INFO: Python environment: C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0
+167 INFO: wrote C:\MT5-TradeManager\MT5TradeManager.spec
+638 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\Scripts\\pyinstaller.exe',
+ 'C:\\Program '
+ 'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\\python311.zip',
+ 'C:\\Program '
+ 'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\\DLLs',
+ 'C:\\Program '
+ 'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\\Lib',
+ 'C:\\Program '
+ 'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0',
+ 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages',
+ 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\win32',
+ 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\win32\\lib',
+ 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\pythonwin',
+ 'C:\\Program '
+ 'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\\Lib\\site-packages',
+ 'C:\\MT5-TradeManager']
+1429 INFO: Appending 'datas' from .spec
+1457 INFO: checking Analysis
+1457 INFO: Building Analysis because Analysis-00.toc is non existent
+1457 INFO: Looking for Python shared library...
+1457 INFO: Using Python shared library: C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\python311.dll
+1457 INFO: Running Analysis Analysis-00.toc
+1457 INFO: Target bytecode optimization level: 0
+1457 INFO: Initializing module dependency graph...
+1459 INFO: Initializing module graph hook caches...
+1477 INFO: Analyzing modules for base_library.zip ...
+2653 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+2738 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+5092 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+7498 INFO: Caching module dependency graph...
+7564 INFO: Analyzing C:\MT5-TradeManager\main.py
+7566 INFO: Processing pre-find-module-path hook 'hook-tkinter.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+7567 INFO: TclTkInfo: initializing cached Tcl/Tk info...
+8029 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+8051 INFO: Processing standard module hook 'hook-customtkinter.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+8309 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+8343 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+8349 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+8350 INFO: SetuptoolsInfo: initializing cached setuptools info...
+9229 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+9592 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+9800 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+11195 INFO: Processing standard module hook 'hook-PIL.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+11362 INFO: Processing standard module hook 'hook-PIL.Image.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+11797 INFO: Processing standard module hook 'hook-numpy.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+12612 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+13251 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+16330 INFO: Processing standard module hook 'hook-charset_normalizer.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+16928 INFO: Processing standard module hook 'hook-xml.etree.cElementTree.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+17088 INFO: Processing standard module hook 'hook-xml.dom.domreg.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+17744 INFO: Processing standard module hook 'hook-PIL.ImageFilter.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+18640 INFO: Processing standard module hook 'hook-matplotlib.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+19759 INFO: Processing standard module hook 'hook-matplotlib.backend_bases.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+20967 INFO: Processing standard module hook 'hook-jinja2.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+21927 INFO: Processing standard module hook 'hook-matplotlib.backends.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+22073 INFO: Processing standard module hook 'hook-matplotlib.pyplot.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+23446 INFO: Processing standard module hook 'hook-dateutil.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+23569 INFO: Processing pre-safe-import-module hook 'hook-six.moves.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28679 INFO: Processing pre-safe-import-module hook 'hook-gi.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+28686 INFO: Processing standard module hook 'hook-certifi.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+28783 INFO: Processing module hooks (post-graph stage)...
+28802 INFO: Processing standard module hook 'hook-matplotlib.backends.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+28803 INFO: Matplotlib backend selection method: automatic discovery of used backends
+29327 INFO: Trying determine the default backend as first importable candidate from the list: ['QtAgg', 'Qt5Agg', 'Gtk4Agg', 'Gtk3Agg', 'TkAgg', 'WxAgg']
+30024 INFO: Selected matplotlib backends: ['QtAgg']
+30038 INFO: Processing standard module hook 'hook-matplotlib.backends.backend_qtagg.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+30062 INFO: Processing standard module hook 'hook-matplotlib.backends.qt_compat.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+30546 INFO: hook-matplotlib.backends.qt_compat: selected 'PyQt6' as the only available Qt bindings.
+31139 INFO: Processing standard module hook 'hook-PIL.SpiderImagePlugin.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+31188 INFO: Processing standard module hook 'hook-_tkinter.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+31210 INFO: Performing binary vs. data reclassification (1238 entries)
+31450 INFO: Looking for ctypes DLLs
+31480 WARNING: Ignoring AppKit.framework/AppKit imported from C:\Users\shani\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\darkdetect\_mac_detect.py - only basenames are supported with ctypes imports!
+31647 INFO: Analyzing run-time hooks ...
+31652 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\rthooks'
+31656 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\rthooks'
+31658 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\rthooks'
+31661 INFO: Including run-time hook 'pyi_rth_mplconfig.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\rthooks'
+31662 INFO: Processing pre-find-module-path hook 'hook-_pyi_rth_utils.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+31663 INFO: Processing standard module hook 'hook-_pyi_rth_utils.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks'
+31673 INFO: Including run-time hook 'pyi_rth__tkinter.py' from 'C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\PyInstaller\\hooks\\rthooks'
+31756 INFO: Creating base_library.zip...
+31785 INFO: Looking for dynamic libraries
+32904 INFO: Extra DLL search directories (AddDllDirectory): ['C:\\Users\\shani\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python311\\site-packages\\numpy.libs']
+32904 INFO: Extra DLL search directories (PATH): []
+34535 INFO: Warnings written to C:\MT5-TradeManager\build\MT5TradeManager\warn-MT5TradeManager.txt
+34650 INFO: Graph cross-reference written to C:\MT5-TradeManager\build\MT5TradeManager\xref-MT5TradeManager.html
+34751 INFO: checking PYZ
+34751 INFO: Building PYZ because PYZ-00.toc is non existent
+34751 INFO: Building PYZ (ZlibArchive) C:\MT5-TradeManager\build\MT5TradeManager\PYZ-00.pyz
+36036 INFO: Building PYZ (ZlibArchive) C:\MT5-TradeManager\build\MT5TradeManager\PYZ-00.pyz completed successfully.
+36101 INFO: checking PKG
+36101 INFO: Building PKG because PKG-00.toc is non existent
+36102 INFO: Building PKG (CArchive) MT5TradeManager.pkg
+47834 INFO: Building PKG (CArchive) MT5TradeManager.pkg completed successfully.
+47883 INFO: Bootloader C:\Users\shani\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+47883 INFO: checking EXE
+47884 INFO: Building EXE because EXE-00.toc is non existent
+47884 INFO: Building EXE from EXE-00.toc
+47884 INFO: Copying bootloader EXE to C:\MT5-TradeManager\dist\MT5TradeManager.exe
+47893 INFO: Copying icon to EXE
+47988 INFO: Copying 0 resources to EXE
+47988 INFO: Embedding manifest in EXE
+47995 INFO: Appending PKG archive to EXE
+48134 INFO: Fixing EXE headers
+51092 INFO: Building EXE from EXE-00.toc completed successfully.
+51126 INFO: Build complete! The results are available in: C:\MT5-TradeManager\dist

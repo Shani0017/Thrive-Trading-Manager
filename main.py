@@ -11,9 +11,28 @@ def main():
         import customtkinter as ctk
         import MetaTrader5 as mt5
         from gui import TradeManagerApp
+        from trade_journal import TradeJournalApp
+        from home_view import HomeScreen
 
         root = ctk.CTk()
-        TradeManagerApp(root, mt5)
+
+        def clear_root():
+            for widget in root.winfo_children():
+                widget.destroy()
+
+        def show_home():
+            clear_root()
+            HomeScreen(root, on_open_manager=show_manager, on_open_journal=show_journal)
+
+        def show_manager():
+            clear_root()
+            TradeManagerApp(root, mt5, on_home=show_home)
+
+        def show_journal():
+            clear_root()
+            TradeJournalApp(root, mt5, on_home=show_home)
+
+        show_home()
         root.mainloop()
     except Exception:
         error_text = traceback.format_exc()

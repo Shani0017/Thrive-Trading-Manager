@@ -63,9 +63,10 @@ class TradeManagerApp:
     CHART_REFRESH_MS = 3000
     CHART_BAR_COUNT = 100
 
-    def __init__(self, root, mt5):
+    def __init__(self, root, mt5, on_home=None):
         self.root = root
         self.mt5 = mt5
+        self.on_home = on_home
         self.root.title("MT5 Trade Manager")
         self.root.geometry("1320x900")
         self.root.minsize(1120, 700)
@@ -136,9 +137,14 @@ class TradeManagerApp:
         bar = ctk.CTkFrame(root, fg_color="transparent")
         bar.pack(fill="x", padx=20, pady=(20, 12))
 
+        if self.on_home:
+            ctk.CTkButton(bar, text="← Home", width=84, height=30, font=ctk.CTkFont(size=11),
+                          fg_color=CARD_ALT, hover_color=BORDER, text_color=TEXT,
+                          command=self._go_home).pack(side="left", padx=(0, 16))
+
         try:
             logo_img = Image.open(_resource_path("assets/logo.png"))
-            self._logo_image = ctk.CTkImage(logo_img, size=(84, 31))
+            self._logo_image = ctk.CTkImage(logo_img, size=(126, 46))
             ctk.CTkLabel(bar, image=self._logo_image, text="").pack(side="left", padx=(0, 20))
         except Exception:
             ctk.CTkLabel(bar, text="THRIVE", text_color=TEXT,
@@ -565,14 +571,27 @@ class TradeManagerApp:
     # Connection / lifecycle
     # ------------------------------------------------------------------
 
-    def _on_close(self):
+    def stop(self):
+        """Cancels all recurring timers without destroying the window --
+        used both by _on_close (window actually closing) and by the Home
+        button (navigating away while the app keeps running): a scheduled
+        after() callback firing against widgets that navigation has already
+        torn down would raise, so this must run before the widgets go."""
         for job in (self._refresh_job, self._reconnect_job, self._chart_job):
             if job is not None:
                 try:
                     self.root.after_cancel(job)
                 except Exception:
                     pass
+
+    def _on_close(self):
+        self.stop()
         self.root.destroy()
+
+    def _go_home(self):
+        self.stop()
+        if self.on_home:
+            self.on_home()
 
     def _set_status(self, text: str, tone: str):
         bg, fg = _TONE_STYLES.get(tone, _TONE_STYLES["neutral"])

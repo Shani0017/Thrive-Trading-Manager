@@ -4,3 +4,6 @@ __pycache__/
 build/
 dist/
 *.spec
+trade_sources.json
+mt5_trade_manager_error.log
+build*.log

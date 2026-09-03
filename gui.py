@@ -65,8 +65,8 @@ class TradeManagerApp:
         self.root = root
         self.mt5 = mt5
         self.root.title("MT5 Trade Manager")
-        self.root.geometry("1320x1040")
-        self.root.minsize(1120, 760)
+        self.root.geometry("1320x900")
+        self.root.minsize(1120, 700)
         self.root.configure(fg_color=BG)
         self.connected = False
         self.selected_ticket = None
@@ -76,9 +76,19 @@ class TradeManagerApp:
         self._reconnect_job = None
         self._chart_job = None
 
-        # Scrollable outer container: a safety net so content can never be
-        # silently cut off below the window edge on a shorter screen or
-        # under Windows display scaling -- it becomes scrollable instead.
+        # Scrollable outer container. The full stack of sections (topbar,
+        # account overview, chart, positions table, detail panel, footer)
+        # adds up to more vertical space than a typical laptop screen can
+        # show at once -- confirmed empirically: on a 1920x1200 screen this
+        # window's natural content height alone exceeds what's visible once
+        # window-manager chrome is accounted for. Rather than force the
+        # window ever-taller (which would just run off the top/bottom of
+        # smaller screens with no way to reach the rest), this scrolls.
+        # Width responsiveness -- which is what resizing the window actually
+        # needs day-to-day (the chart and columns reflowing wider/narrower)
+        # -- still works correctly inside a scrollable frame; only vertical
+        # "stretch to fill extra height" does not, which isn't very useful
+        # for a fixed-section dashboard like this one anyway.
         scroll = ctk.CTkScrollableFrame(root, fg_color=BG)
         scroll.pack(fill="both", expand=True)
         content = scroll
@@ -89,21 +99,19 @@ class TradeManagerApp:
 
         split = ctk.CTkFrame(content, fg_color="transparent")
         split.pack(fill="both", expand=True, padx=20, pady=(4, 12))
+        # grid (not pack) for this row: it sizes the row to whichever column
+        # needs more height (normally the detail panel) without requiring
+        # either column to hard-code a height, while still giving the left
+        # column the growable width and the right column a fixed minimum.
+        split.grid_columnconfigure(0, weight=1)
+        split.grid_columnconfigure(1, weight=0, minsize=420)
+        split.grid_rowconfigure(0, weight=1)
 
         left = ctk.CTkFrame(split, fg_color="transparent")
-        left.pack(side="left", fill="both", expand=True)
+        left.grid(row=0, column=0, sticky="nsew")
 
-        # Fixed width, but height must ALSO be set explicitly: pack_propagate(False)
-        # makes this frame ignore its children's requested size entirely, so
-        # without an explicit height it silently defaulted to a small built-in
-        # height and clipped everything below the Breakeven section (Stop
-        # Loss/Take Profit, Risk/Reward, Close Position) out of view, with no
-        # scrollbar of its own to reach it. A generous fixed height is safe --
-        # the whole window is already wrapped in a scrollable container, so if
-        # this is taller than the visible viewport the page just scrolls.
-        right = ctk.CTkFrame(split, fg_color="transparent", width=420, height=1000)
-        right.pack(side="left", fill="y", padx=(16, 0))
-        right.pack_propagate(False)
+        right = ctk.CTkFrame(split, fg_color="transparent")
+        right.grid(row=0, column=1, sticky="new", padx=(16, 0))
 
         self._build_positions_panel(left)
         self._build_detail_panel(right)
@@ -459,27 +467,57 @@ class TradeManagerApp:
 
     def _build_chart_panel(self, root):
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="x", padx=20, pady=(0, 12))
+        card.pack(fill="both", expand=True, padx=20, pady=(0, 12))
 
-        self.chart_title_label = ctk.CTkLabel(card, text="LIVE CHART", font=ctk.CTkFont(size=10, weight="bold"),
+        header_row = ctk.CTkFrame(card, fg_color="transparent")
+        header_row.pack(fill="x", padx=18, pady=(14, 6))
+        self.chart_title_label = ctk.CTkLabel(header_row, text="LIVE CHART", font=ctk.CTkFont(size=10, weight="bold"),
                                                text_color=MUTED)
-        self.chart_title_label.pack(anchor="w", padx=18, pady=(14, 6))
+        self.chart_title_label.pack(side="left")
 
-        fig = Figure(figsize=(10, 3.4), dpi=100, facecolor=CARD)
+        self.chart_timeframe = "M1"
+        self._timeframe_buttons = {}
+        tf_row = ctk.CTkFrame(header_row, fg_color=CARD_ALT, corner_radius=8)
+        tf_row.pack(side="right")
+        for label, tf in (("1m", "M1"), ("5m", "M5"), ("15m", "M15")):
+            btn = ctk.CTkButton(tf_row, text=label, width=44, height=24, font=ctk.CTkFont(size=10),
+                                 command=lambda tf=tf: self._set_chart_timeframe(tf))
+            btn.pack(side="left", padx=2, pady=2)
+            self._timeframe_buttons[tf] = btn
+        self._refresh_timeframe_buttons()
+
+        fig = Figure(figsize=(10, 2.6), dpi=100, facecolor=CARD)
         self.chart_ax = fig.add_subplot(111)
         self._style_chart_axes()
         self.chart_ax.text(0.5, 0.5, "Select a position to view its chart", color=MUTED,
                             ha="center", va="center", transform=self.chart_ax.transAxes, fontsize=10)
-        fig.subplots_adjust(left=0.06, right=0.98, top=0.94, bottom=0.06)
+        fig.subplots_adjust(left=0.04, right=0.90, top=0.94, bottom=0.06)
 
         self.chart_canvas = FigureCanvasTkAgg(fig, master=card)
         self.chart_canvas.get_tk_widget().configure(bg=CARD, highlightthickness=0)
-        self.chart_canvas.get_tk_widget().pack(fill="x", padx=18, pady=(0, 18))
+        self.chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=18, pady=(0, 18))
         self.chart_canvas.draw()
+
+    def _refresh_timeframe_buttons(self):
+        for tf, btn in self._timeframe_buttons.items():
+            active = tf == self.chart_timeframe
+            btn.configure(fg_color=BLUE if active else "transparent",
+                          text_color=TEXT if active else MUTED,
+                          hover_color=BLUE_HOVER if active else BORDER)
+
+    def _set_chart_timeframe(self, tf: str):
+        self.chart_timeframe = tf
+        self._refresh_timeframe_buttons()
+        if self.connected:
+            self._refresh_chart()
 
     def _style_chart_axes(self):
         self.chart_ax.clear()
         self.chart_ax.set_facecolor(CARD)
+        # Price labels on the right, next to the candles, matching how MT5/
+        # TradingView-style charts place the price axis.
+        self.chart_ax.yaxis.tick_right()
+        self.chart_ax.yaxis.set_label_position("right")
         self.chart_ax.tick_params(colors=MUTED, labelsize=8)
         for spine in self.chart_ax.spines.values():
             spine.set_color(BORDER)
@@ -558,7 +596,8 @@ class TradeManagerApp:
             return
 
         try:
-            rates = self.mt5.copy_rates_from_pos(symbol, self.mt5.TIMEFRAME_M1, 0, self.CHART_BAR_COUNT)
+            timeframe = getattr(self.mt5, f"TIMEFRAME_{self.chart_timeframe}")
+            rates = self.mt5.copy_rates_from_pos(symbol, timeframe, 0, self.CHART_BAR_COUNT)
         except Exception:
             rates = None
 
@@ -570,7 +609,21 @@ class TradeManagerApp:
             return
 
         self._draw_candles(rates)
-        self.chart_title_label.configure(text=f"LIVE CHART — {symbol} (M1)")
+
+        # Dotted line + price tag at the position's current price, so the
+        # user can see exactly where the next candle will open relative to
+        # the visible history, matching how MT5/TradingView mark live price.
+        position = self.positions_by_ticket.get(self.selected_ticket)
+        if position is not None:
+            current_price = position.price_current
+            self.chart_ax.axhline(y=current_price, color=BLUE, linestyle=(0, (4, 3)), linewidth=1)
+            self.chart_ax.annotate(
+                f"{current_price:.5f}", xy=(1, current_price), xycoords=("axes fraction", "data"),
+                xytext=(4, 0), textcoords="offset points", va="center", ha="left",
+                color=BG, fontsize=8, fontweight="bold", annotation_clip=False,
+                bbox=dict(boxstyle="round,pad=0.25", fc=BLUE, ec="none"))
+
+        self.chart_title_label.configure(text=f"LIVE CHART — {symbol} ({self.chart_timeframe})")
         self.chart_canvas.draw_idle()
 
     def _draw_candles(self, rates):

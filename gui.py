@@ -227,23 +227,41 @@ class TradeManagerApp:
 
         columns = ("symbol", "direction", "volume", "entry", "current", "pnl", "pips", "sl", "tp")
         headings = {
-            "symbol": "Symbol", "direction": "Direction", "volume": "Volume",
-            "entry": "Entry Price", "current": "Current Price", "pnl": "P&L",
+            "symbol": "Symbol", "direction": "Dir", "volume": "Vol",
+            "entry": "Entry", "current": "Current", "pnl": "P&L",
             "pips": "Pips", "sl": "SL", "tp": "TP",
         }
-        widths = {"symbol": 85, "direction": 80, "volume": 65, "entry": 95,
-                  "current": 95, "pnl": 85, "pips": 65, "sl": 95, "tp": 95}
+        # Relative shares of the table's actual width (sums to 1.0), applied
+        # in pixels by _on_tree_resize below -- fixed pixel widths (the
+        # original design) don't fit once this table shares a row with the
+        # chart instead of spanning the full window, and ttk.Treeview
+        # neither shrinks columns to fit nor offers horizontal scrolling on
+        # its own, so columns silently ran off the visible edge with no way
+        # to reach them. Recomputing on every resize keeps all 9 columns
+        # visible at whatever width is actually available.
+        self._column_weights = {
+            "symbol": 0.14, "direction": 0.10, "volume": 0.08, "entry": 0.14,
+            "current": 0.14, "pnl": 0.12, "pips": 0.08, "sl": 0.10, "tp": 0.10,
+        }
         self.tree = ttk.Treeview(card, columns=columns, show="headings", height=6,
                                   style="Positions.Treeview")
         for col in columns:
             self.tree.heading(col, text=headings[col])
-            self.tree.column(col, width=widths[col], anchor="center", stretch=True)
-        self.tree.pack(fill="x", padx=18, pady=(0, 8))
+            self.tree.column(col, anchor="center", stretch=False, width=60)
+        self.tree.pack(fill="both", expand=True, padx=18, pady=(0, 8))
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
+        self.tree.bind("<Configure>", self._on_tree_resize)
 
         self.table_summary_label = ctk.CTkLabel(card, text="0 position(s)  •  Total P/L: $0.00",
                                                   font=ctk.CTkFont(size=11), text_color=MUTED)
         self.table_summary_label.pack(anchor="w", padx=18, pady=(0, 16))
+
+    def _on_tree_resize(self, event):
+        total_width = event.width
+        if total_width <= 1:
+            return
+        for col, weight in self._column_weights.items():
+            self.tree.column(col, width=max(30, int(total_width * weight)))
 
     def _setup_treeview_style(self):
         """ttk.Treeview has no CustomTkinter equivalent (CTk provides no table

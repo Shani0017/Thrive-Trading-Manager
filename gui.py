@@ -96,24 +96,28 @@ class TradeManagerApp:
         content = scroll
 
         self._build_topbar(content)
-        self._build_account_overview(content)
 
-        # Chart and positions table side by side (per user's layout mockup);
-        # the detail panel stays full-width below both, since it needs the
-        # full row's width for its four side-by-side sections (see
-        # _build_detail_panel's own comment on why a narrow column caused
-        # real text truncation there).
-        chart_positions_row = ctk.CTkFrame(content, fg_color="transparent")
-        chart_positions_row.pack(fill="x", padx=20, pady=(0, 12))
+        # Open Positions and Account Overview have swapped places per user
+        # request: Positions is now the full-width section right under the
+        # topbar (the most immediately useful info), and Account Overview
+        # moved into the row beside the chart -- which otherwise stays
+        # exactly as it was. The detail panel stays full-width below both,
+        # since it needs the full row's width for its four side-by-side
+        # sections (see _build_detail_panel's own comment on why a narrow
+        # column caused real text truncation there).
+        self._build_positions_panel(content)
 
-        chart_col = ctk.CTkFrame(chart_positions_row, fg_color="transparent")
+        chart_overview_row = ctk.CTkFrame(content, fg_color="transparent")
+        chart_overview_row.pack(fill="x", padx=20, pady=(0, 12))
+
+        chart_col = ctk.CTkFrame(chart_overview_row, fg_color="transparent")
         chart_col.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
-        positions_col = ctk.CTkFrame(chart_positions_row, fg_color="transparent")
-        positions_col.pack(side="left", fill="both", expand=True, padx=(8, 0))
+        overview_col = ctk.CTkFrame(chart_overview_row, fg_color="transparent")
+        overview_col.pack(side="left", fill="both", expand=True, padx=(8, 0))
 
         self._build_chart_panel(chart_col)
-        self._build_positions_panel(positions_col)
+        self._build_account_overview(overview_col)
 
         self._build_detail_panel(content)
 
@@ -192,8 +196,12 @@ class TradeManagerApp:
             self.root.clipboard_append(text)
 
     def _build_account_overview(self, root):
+        # Now sits beside the chart (shares a row, roughly half window
+        # width) instead of spanning the full window, so fill="both"/
+        # expand=True matches the chart's height and no extra outer padx is
+        # needed -- the wrapping column already provides that margin.
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="x", padx=20, pady=(0, 12))
+        card.pack(fill="both", expand=True)
 
         ctk.CTkLabel(card, text="ACCOUNT OVERVIEW", font=ctk.CTkFont(size=10, weight="bold"),
                      text_color=MUTED).pack(anchor="w", padx=18, pady=(14, 8))
@@ -208,10 +216,14 @@ class TradeManagerApp:
         self.profit_value, self.profit_pct_value = self._stat_cell(row, "Profit / Loss", with_pct=True)
 
     def _stat_cell(self, parent, label, with_pct=False):
+        # Font sizes trimmed down from the original full-width design (18px
+        # values) now that this row shares half the window with the chart
+        # instead of spanning it -- 5 cells at the old size crowded a
+        # narrower row.
         cell = ctk.CTkFrame(parent, fg_color="transparent")
         cell.pack(side="left", expand=True, fill="x")
-        ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=11), text_color=MUTED).pack(anchor="w")
-        value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=18, weight="bold"), text_color=TEXT)
+        ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=10), text_color=MUTED).pack(anchor="w")
+        value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT)
         value.pack(anchor="w", pady=(2, 0))
         if with_pct:
             pct = ctk.CTkLabel(cell, text="", font=ctk.CTkFont(size=11), text_color=MUTED)
@@ -220,11 +232,14 @@ class TradeManagerApp:
         return value
 
     def _build_positions_panel(self, root):
-        # Now sits alongside the chart (similar natural height to it), so
-        # fill="both"/expand=True here matches its column's height evenly
-        # instead of leaving a visible gap under a shorter card.
+        # Full-width, standalone section right under the topbar (swapped
+        # with Account Overview per user request) -- fill="x" only (not
+        # "both"/expand=True): standing alone rather than sharing a row with
+        # something taller, an expanding card here would stretch to consume
+        # leftover scroll space, turning a short table into a mostly-empty
+        # box (the exact bug already fixed once before in this file).
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="both", expand=True)
+        card.pack(fill="x", anchor="n", padx=20, pady=(0, 12))
 
         self.positions_title = ctk.CTkLabel(card, text="OPEN POSITIONS (0)",
                                              font=ctk.CTkFont(size=11, weight="bold"), text_color=MUTED)

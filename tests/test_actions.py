@@ -75,15 +75,15 @@ def test_apply_breakeven_with_pips_buy_adds_offset(mock_mt5, buy_position):
     apply_breakeven(mock_mt5, buy_position, pips=3)
 
     sent = mock_mt5.order_send.call_args[0][0]
-    # 2-digit symbol -> pip_size = point = 0.01 -> offset = 0.03
-    assert sent["sl"] == pytest.approx(2280.03)
+    # 2-digit (Gold) symbol -> pip_size = point * 10 = 0.10 -> offset = 0.30
+    assert sent["sl"] == pytest.approx(2280.30)
 
 
 def test_apply_breakeven_with_pips_sell_subtracts_offset(mock_mt5, sell_position):
     apply_breakeven(mock_mt5, sell_position, pips=3)
 
     sent = mock_mt5.order_send.call_args[0][0]
-    assert sent["sl"] == pytest.approx(2299.97)
+    assert sent["sl"] == pytest.approx(2299.70)
 
 
 def test_half_close_sends_half_volume_at_market(mock_mt5, buy_position):

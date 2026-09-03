@@ -146,9 +146,34 @@ class TradeManagerApp:
                                           font=ctk.CTkFont(size=12, weight="bold"), text_color=AMBER)
         self.status_label.pack(padx=14, pady=6)
 
+        # Account / Open Positions / Active Symbol chips anchored to the top
+        # RIGHT of the bar (logo + connection status stay on the left).
+        # Packed with side="right" in reverse visual order: the first widget
+        # packed to a side claims the outermost slice on that side, so
+        # packing Active Symbol first, then Open Positions, then Account
+        # produces the desired left-to-right reading order (Account, Open
+        # Positions, Active Symbol) ending flush against the right edge.
+        self.active_symbol_chip = ctk.CTkFrame(bar, corner_radius=10, fg_color=CARD, border_width=1,
+                                                 border_color=BORDER)
+        self.active_symbol_chip.pack(side="right")
+        self.active_symbol_value = ctk.CTkLabel(self.active_symbol_chip, text="—",
+                                                  font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT)
+        self.active_symbol_value.pack(padx=16, pady=(6, 0))
+        ctk.CTkLabel(self.active_symbol_chip, text="Active Symbol", font=ctk.CTkFont(size=9),
+                     text_color=MUTED).pack(padx=16, pady=(0, 6))
+
+        self.position_count_chip = ctk.CTkFrame(bar, corner_radius=10, fg_color=CARD, border_width=1,
+                                                  border_color=BORDER)
+        self.position_count_chip.pack(side="right", padx=(0, 12))
+        self.position_count_value = ctk.CTkLabel(self.position_count_chip, text="0",
+                                                   font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT)
+        self.position_count_value.pack(padx=16, pady=(6, 0))
+        ctk.CTkLabel(self.position_count_chip, text="Open Positions", font=ctk.CTkFont(size=9),
+                     text_color=MUTED).pack(padx=16, pady=(0, 6))
+
         account_chip = ctk.CTkFrame(bar, corner_radius=10, fg_color=CARD, border_width=1,
                                      border_color=BORDER)
-        account_chip.pack(side="left", padx=(0, 16))
+        account_chip.pack(side="right", padx=(0, 12))
         inner = ctk.CTkFrame(account_chip, fg_color="transparent")
         inner.pack(padx=12, pady=6)
         ctk.CTkLabel(inner, text="Account", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
@@ -159,24 +184,6 @@ class TradeManagerApp:
         ctk.CTkButton(inner, text="Copy", width=44, height=22, font=ctk.CTkFont(size=10),
                       fg_color=CARD_ALT, hover_color=BORDER, text_color=MUTED,
                       command=self._copy_account_number).pack(side="left")
-
-        self.position_count_chip = ctk.CTkFrame(bar, corner_radius=10, fg_color=CARD, border_width=1,
-                                                  border_color=BORDER)
-        self.position_count_chip.pack(side="left", padx=(0, 12))
-        self.position_count_value = ctk.CTkLabel(self.position_count_chip, text="0",
-                                                   font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT)
-        self.position_count_value.pack(padx=16, pady=(6, 0))
-        ctk.CTkLabel(self.position_count_chip, text="Open Positions", font=ctk.CTkFont(size=9),
-                     text_color=MUTED).pack(padx=16, pady=(0, 6))
-
-        self.active_symbol_chip = ctk.CTkFrame(bar, corner_radius=10, fg_color=CARD, border_width=1,
-                                                 border_color=BORDER)
-        self.active_symbol_chip.pack(side="left")
-        self.active_symbol_value = ctk.CTkLabel(self.active_symbol_chip, text="—",
-                                                  font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT)
-        self.active_symbol_value.pack(padx=16, pady=(6, 0))
-        ctk.CTkLabel(self.active_symbol_chip, text="Active Symbol", font=ctk.CTkFont(size=9),
-                     text_color=MUTED).pack(padx=16, pady=(0, 6))
 
     def _copy_account_number(self):
         text = self.account_number_label.cget("text")

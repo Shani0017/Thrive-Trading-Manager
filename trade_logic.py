@@ -1,9 +1,10 @@
 def pip_size(symbol_info) -> float:
     """symbol_info: an MT5 SymbolInfo-like object with .point and .digits.
-    A 'pip' is the 2nd-to-last decimal for 3-digit (JPY pairs) and 5-digit
-    (standard forex) quoted symbols, so those use point*10. Everything else
-    (2-digit Gold, 4-digit legacy forex quoting) uses point as-is."""
-    if symbol_info.digits in (3, 5):
+    A 'pip' is the 2nd-to-last decimal for 2-digit (Gold: 1 pip = $0.10, per
+    explicit user correction), 3-digit (JPY pairs), and 5-digit (standard
+    forex) quoted symbols, so those use point*10. 4-digit legacy forex
+    quoting uses point as-is (last decimal is the pip there)."""
+    if symbol_info.digits in (2, 3, 5):
         return symbol_info.point * 10
     return symbol_info.point
 

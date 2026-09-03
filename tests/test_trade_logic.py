@@ -21,8 +21,10 @@ def test_pip_size_3_digit_jpy():
 
 
 def test_pip_size_2_digit_gold():
+    # 1 pip = $0.10 for Gold, per explicit user correction (point * 10,
+    # same 2nd-to-last-decimal convention as 3/5-digit symbols).
     info = _symbol_info(digits=2, point=0.01)
-    assert pip_size(info) == pytest.approx(0.01)
+    assert pip_size(info) == pytest.approx(0.10)
 
 
 def test_breakeven_price_exact_buy():

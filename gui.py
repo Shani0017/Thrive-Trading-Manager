@@ -216,14 +216,14 @@ class TradeManagerApp:
         self.profit_value, self.profit_pct_value = self._stat_cell(row, "Profit / Loss", with_pct=True)
 
     def _stat_cell(self, parent, label, with_pct=False):
-        # Font sizes trimmed down from the original full-width design (18px
-        # values) now that this row shares half the window with the chart
-        # instead of spanning it -- 5 cells at the old size crowded a
-        # narrower row.
+        # Stacked as a vertical list (one stat per row) rather than side by
+        # side: since this card now shares half the window with the chart,
+        # a horizontal row of 5 cells left most of the card's height empty
+        # below it. Stacking fills that space usefully instead.
         cell = ctk.CTkFrame(parent, fg_color="transparent")
-        cell.pack(side="left", expand=True, fill="x")
+        cell.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=10), text_color=MUTED).pack(anchor="w")
-        value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT)
+        value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=16, weight="bold"), text_color=TEXT)
         value.pack(anchor="w", pady=(2, 0))
         if with_pct:
             pct = ctk.CTkLabel(cell, text="", font=ctk.CTkFont(size=11), text_color=MUTED)

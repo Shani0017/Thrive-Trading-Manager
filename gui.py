@@ -6,6 +6,9 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from PIL import Image
+import numpy as np
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from actions import apply_breakeven, half_close, full_close, apply_custom_sltp
 from trade_logic import pip_size as _pip_size, breakeven_price as _breakeven_price
 
@@ -51,13 +54,19 @@ class TradeManagerApp:
     # enough that polling every 500ms keeps the UI feeling near-instant.
     REFRESH_MS = 500
     RECONNECT_MS = 5000
+    # The chart redraws its whole figure every tick (clear + replot ~100
+    # candles), which is far more expensive than the text-only position/
+    # account refresh above -- 3s keeps it visually live without redrawing
+    # matplotlib on every single 500ms position-poll tick.
+    CHART_REFRESH_MS = 3000
+    CHART_BAR_COUNT = 100
 
     def __init__(self, root, mt5):
         self.root = root
         self.mt5 = mt5
         self.root.title("MT5 Trade Manager")
-        self.root.geometry("1320x860")
-        self.root.minsize(1120, 700)
+        self.root.geometry("1320x1040")
+        self.root.minsize(1120, 760)
         self.root.configure(fg_color=BG)
         self.connected = False
         self.selected_ticket = None
@@ -65,6 +74,7 @@ class TradeManagerApp:
         self.be_mode = "exact"
         self._refresh_job = None
         self._reconnect_job = None
+        self._chart_job = None
 
         # Scrollable outer container: a safety net so content can never be
         # silently cut off below the window edge on a shorter screen or
@@ -82,18 +92,28 @@ class TradeManagerApp:
         left = ctk.CTkFrame(split, fg_color="transparent")
         left.pack(side="left", fill="both", expand=True)
 
-        right = ctk.CTkFrame(split, fg_color="transparent", width=420)
+        # Fixed width, but height must ALSO be set explicitly: pack_propagate(False)
+        # makes this frame ignore its children's requested size entirely, so
+        # without an explicit height it silently defaulted to a small built-in
+        # height and clipped everything below the Breakeven section (Stop
+        # Loss/Take Profit, Risk/Reward, Close Position) out of view, with no
+        # scrollbar of its own to reach it. A generous fixed height is safe --
+        # the whole window is already wrapped in a scrollable container, so if
+        # this is taller than the visible viewport the page just scrolls.
+        right = ctk.CTkFrame(split, fg_color="transparent", width=420, height=1000)
         right.pack(side="left", fill="y", padx=(16, 0))
         right.pack_propagate(False)
 
         self._build_positions_panel(left)
         self._build_detail_panel(right)
 
+        self._build_chart_panel(content)
         self._build_footer(content)
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._try_connect()
         self._refresh_job = self.root.after(self.REFRESH_MS, self._refresh_loop)
+        self._chart_job = self.root.after(self.CHART_REFRESH_MS, self._chart_loop)
 
     # ------------------------------------------------------------------
     # Layout construction
@@ -430,6 +450,35 @@ class TradeManagerApp:
         self._set_action_panel_enabled(False)
         self._clear_detail_header()
 
+    def _build_chart_panel(self, root):
+        card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
+        card.pack(fill="x", padx=20, pady=(0, 12))
+
+        self.chart_title_label = ctk.CTkLabel(card, text="LIVE CHART", font=ctk.CTkFont(size=10, weight="bold"),
+                                               text_color=MUTED)
+        self.chart_title_label.pack(anchor="w", padx=18, pady=(14, 6))
+
+        fig = Figure(figsize=(10, 3.4), dpi=100, facecolor=CARD)
+        self.chart_ax = fig.add_subplot(111)
+        self._style_chart_axes()
+        self.chart_ax.text(0.5, 0.5, "Select a position to view its chart", color=MUTED,
+                            ha="center", va="center", transform=self.chart_ax.transAxes, fontsize=10)
+        fig.subplots_adjust(left=0.06, right=0.98, top=0.94, bottom=0.06)
+
+        self.chart_canvas = FigureCanvasTkAgg(fig, master=card)
+        self.chart_canvas.get_tk_widget().configure(bg=CARD, highlightthickness=0)
+        self.chart_canvas.get_tk_widget().pack(fill="x", padx=18, pady=(0, 18))
+        self.chart_canvas.draw()
+
+    def _style_chart_axes(self):
+        self.chart_ax.clear()
+        self.chart_ax.set_facecolor(CARD)
+        self.chart_ax.tick_params(colors=MUTED, labelsize=8)
+        for spine in self.chart_ax.spines.values():
+            spine.set_color(BORDER)
+        self.chart_ax.grid(True, color=BORDER, linewidth=0.5, alpha=0.5)
+        self.chart_ax.set_xticks([])
+
     def _build_footer(self, root):
         bar = ctk.CTkFrame(root, fg_color="transparent")
         bar.pack(fill="x", padx=20, pady=(0, 16))
@@ -447,7 +496,7 @@ class TradeManagerApp:
     # ------------------------------------------------------------------
 
     def _on_close(self):
-        for job in (self._refresh_job, self._reconnect_job):
+        for job in (self._refresh_job, self._reconnect_job, self._chart_job):
             if job is not None:
                 try:
                     self.root.after_cancel(job)
@@ -479,6 +528,65 @@ class TradeManagerApp:
             self._refresh_account_info()
             self._refresh_positions()
         self._refresh_job = self.root.after(self.REFRESH_MS, self._refresh_loop)
+
+    def _chart_loop(self):
+        if self.connected:
+            self._refresh_chart()
+        self._chart_job = self.root.after(self.CHART_REFRESH_MS, self._chart_loop)
+
+    def _refresh_chart(self):
+        symbol = None
+        if self.selected_ticket is not None:
+            position = self.positions_by_ticket.get(self.selected_ticket)
+            if position is not None:
+                symbol = position.symbol
+
+        self._style_chart_axes()
+
+        if symbol is None:
+            self.chart_ax.text(0.5, 0.5, "Select a position to view its chart", color=MUTED,
+                                ha="center", va="center", transform=self.chart_ax.transAxes, fontsize=10)
+            self.chart_title_label.configure(text="LIVE CHART")
+            self.chart_canvas.draw_idle()
+            return
+
+        try:
+            rates = self.mt5.copy_rates_from_pos(symbol, self.mt5.TIMEFRAME_M1, 0, self.CHART_BAR_COUNT)
+        except Exception:
+            rates = None
+
+        if rates is None or len(rates) == 0:
+            self.chart_ax.text(0.5, 0.5, f"No chart data available for {symbol}", color=MUTED,
+                                ha="center", va="center", transform=self.chart_ax.transAxes, fontsize=10)
+            self.chart_title_label.configure(text="LIVE CHART")
+            self.chart_canvas.draw_idle()
+            return
+
+        self._draw_candles(rates)
+        self.chart_title_label.configure(text=f"LIVE CHART — {symbol} (M1)")
+        self.chart_canvas.draw_idle()
+
+    def _draw_candles(self, rates):
+        """rates: the numpy structured array returned by mt5.copy_rates_from_pos,
+        with 'open'/'high'/'low'/'close' fields. Drawn with plain matplotlib
+        bar/vlines primitives rather than a candlestick-charting library, to
+        avoid adding a second charting dependency beyond matplotlib itself."""
+        opens = rates["open"]
+        highs = rates["high"]
+        lows = rates["low"]
+        closes = rates["close"]
+        x = np.arange(len(rates))
+        up = closes >= opens
+        down = ~up
+
+        if up.any():
+            self.chart_ax.vlines(x[up], lows[up], highs[up], color=GREEN, linewidth=1)
+            self.chart_ax.bar(x[up], closes[up] - opens[up], bottom=np.minimum(opens[up], closes[up]),
+                               width=0.6, color=GREEN)
+        if down.any():
+            self.chart_ax.vlines(x[down], lows[down], highs[down], color=RED, linewidth=1)
+            self.chart_ax.bar(x[down], opens[down] - closes[down], bottom=np.minimum(opens[down], closes[down]),
+                               width=0.6, color=RED)
 
     def _refresh_account_info(self):
         """Refreshes the connection badge, account chip, and account-overview

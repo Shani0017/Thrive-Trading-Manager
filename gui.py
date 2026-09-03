@@ -14,17 +14,18 @@ from actions import apply_breakeven, half_close, full_close, apply_custom_sltp
 from trade_logic import pip_size as _pip_size, breakeven_price as _breakeven_price
 
 ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
+ctk.set_default_color_theme("green")
 
-# Dark trading-dashboard palette, matched to the user's reference mockup.
-BG = "#0f1115"
-CARD = "#171a21"
-CARD_ALT = "#1d212a"
-BORDER = "#262b36"
-TEXT = "#e8eaed"
-MUTED = "#8a8f98"
-BLUE = "#4f9cf9"
-BLUE_HOVER = "#3b82f6"
+# Palette matched to thriveweb3.net's actual brand: pure black background,
+# vivid green accent (Tailwind green-500/400), white headline text.
+BG = "#000000"
+CARD = "#0a0a0a"
+CARD_ALT = "#141414"
+BORDER = "#242424"
+TEXT = "#ffffff"
+MUTED = "#9ca3af"
+ACCENT = "#22c55e"
+ACCENT_HOVER = "#16a34a"
 GREEN = "#4ade80"
 GREEN_BG = "#123322"
 RED = "#f87171"
@@ -96,13 +97,24 @@ class TradeManagerApp:
 
         self._build_topbar(content)
         self._build_account_overview(content)
-        self._build_chart_panel(content)
-        # Positions table and detail panel are now both full-width, stacked
-        # vertically, instead of a narrow fixed-width side-by-side split --
-        # the 420px sidebar didn't have room for the detail panel's content
-        # (real text truncation/overlap was reported), and there's no
-        # functional reason these two need to sit side by side.
-        self._build_positions_panel(content)
+
+        # Chart and positions table side by side (per user's layout mockup);
+        # the detail panel stays full-width below both, since it needs the
+        # full row's width for its four side-by-side sections (see
+        # _build_detail_panel's own comment on why a narrow column caused
+        # real text truncation there).
+        chart_positions_row = ctk.CTkFrame(content, fg_color="transparent")
+        chart_positions_row.pack(fill="x", padx=20, pady=(0, 12))
+
+        chart_col = ctk.CTkFrame(chart_positions_row, fg_color="transparent")
+        chart_col.pack(side="left", fill="both", expand=True, padx=(0, 8))
+
+        positions_col = ctk.CTkFrame(chart_positions_row, fg_color="transparent")
+        positions_col.pack(side="left", fill="both", expand=True, padx=(8, 0))
+
+        self._build_chart_panel(chart_col)
+        self._build_positions_panel(positions_col)
+
         self._build_detail_panel(content)
 
         self._build_footer(content)
@@ -201,13 +213,11 @@ class TradeManagerApp:
         return value
 
     def _build_positions_panel(self, root):
-        # Packed with fill="x" only (never "both"/expand=True): inside the
-        # scrollable container, an expanding card here would stretch to
-        # consume any leftover scroll space, turning a 1-row table into a
-        # mostly-empty dark box. Anchoring to natural content height instead
-        # leaves any extra space as plain page background.
+        # Now sits alongside the chart (similar natural height to it), so
+        # fill="both"/expand=True here matches its column's height evenly
+        # instead of leaving a visible gap under a shorter card.
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="x", anchor="n", padx=20, pady=(0, 12))
+        card.pack(fill="both", expand=True)
 
         self.positions_title = ctk.CTkLabel(card, text="OPEN POSITIONS (0)",
                                              font=ctk.CTkFont(size=11, weight="bold"), text_color=MUTED)
@@ -344,7 +354,7 @@ class TradeManagerApp:
         toggle_row = ctk.CTkFrame(be_box, fg_color=CARD, corner_radius=8)
         toggle_row.pack(fill="x", padx=12)
         self.be_exact_toggle = ctk.CTkButton(toggle_row, text="Exact", height=28,
-                                              fg_color=BLUE, hover_color=BLUE_HOVER, text_color=TEXT,
+                                              fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT,
                                               command=lambda: self._set_be_mode("exact"))
         self.be_exact_toggle.pack(side="left", expand=True, fill="x", padx=(3, 1), pady=3)
         self.be_pips_toggle = ctk.CTkButton(toggle_row, text="+ Pips", height=28,
@@ -361,7 +371,7 @@ class TradeManagerApp:
         ctk.CTkLabel(offset_line, text="pips", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
             side="left", padx=(6, 6))
         self.be_apply_btn = ctk.CTkButton(offset_line, text="Apply", height=28, width=56,
-                                           fg_color=BLUE, hover_color=BLUE_HOVER,
+                                           fg_color=ACCENT, hover_color=ACCENT_HOVER,
                                            command=self._on_breakeven_apply)
         self.be_apply_btn.pack(side="left")
 
@@ -381,7 +391,7 @@ class TradeManagerApp:
         self.sl_field_frame.pack(side="left")
         self.sl_entry.bind("<KeyRelease>", self._update_risk_reward)
         self.set_sl_btn = ctk.CTkButton(sl_line, text="Set", width=48, height=28,
-                                         fg_color=BLUE, hover_color=BLUE_HOVER, command=self._on_set_sl)
+                                         fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._on_set_sl)
         self.set_sl_btn.pack(side="left", padx=(6, 0))
         ctk.CTkLabel(sl_box, text="Current:", font=ctk.CTkFont(size=9), text_color=MUTED).pack(
             anchor="w", padx=12, pady=(10, 0))
@@ -398,7 +408,7 @@ class TradeManagerApp:
         self.tp_field_frame.pack(side="left")
         self.tp_entry.bind("<KeyRelease>", self._update_risk_reward)
         self.set_tp_btn = ctk.CTkButton(tp_line, text="Set", width=48, height=28,
-                                         fg_color=BLUE, hover_color=BLUE_HOVER, command=self._on_set_tp)
+                                         fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._on_set_tp)
         self.set_tp_btn.pack(side="left", padx=(6, 0))
         ctk.CTkLabel(tp_box, text="Current:", font=ctk.CTkFont(size=9), text_color=MUTED).pack(
             anchor="w", padx=12, pady=(10, 0))
@@ -422,7 +432,7 @@ class TradeManagerApp:
         self.skip_confirm_check = ctk.CTkCheckBox(
             close_box, text="Don't ask again",
             variable=self.skip_confirm_var, font=ctk.CTkFont(size=10), text_color=MUTED,
-            fg_color=BLUE, hover_color=BLUE_HOVER, border_color=BORDER,
+            fg_color=ACCENT, hover_color=ACCENT_HOVER, border_color=BORDER,
             checkbox_width=14, checkbox_height=14)
         self.skip_confirm_check.pack(anchor="w", padx=12, pady=(0, 10))
 
@@ -442,7 +452,7 @@ class TradeManagerApp:
 
     def _build_chart_panel(self, root):
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="both", expand=True, padx=20, pady=(0, 12))
+        card.pack(fill="both", expand=True)
 
         header_row = ctk.CTkFrame(card, fg_color="transparent")
         header_row.pack(fill="x", padx=18, pady=(14, 6))
@@ -476,9 +486,9 @@ class TradeManagerApp:
     def _refresh_timeframe_buttons(self):
         for tf, btn in self._timeframe_buttons.items():
             active = tf == self.chart_timeframe
-            btn.configure(fg_color=BLUE if active else "transparent",
+            btn.configure(fg_color=ACCENT if active else "transparent",
                           text_color=TEXT if active else MUTED,
-                          hover_color=BLUE_HOVER if active else BORDER)
+                          hover_color=ACCENT_HOVER if active else BORDER)
 
     def _set_chart_timeframe(self, tf: str):
         self.chart_timeframe = tf
@@ -823,10 +833,10 @@ class TradeManagerApp:
     def _set_be_mode(self, mode: str):
         self.be_mode = mode
         if mode == "exact":
-            self.be_exact_toggle.configure(fg_color=BLUE, text_color=TEXT, hover_color=BLUE_HOVER)
+            self.be_exact_toggle.configure(fg_color=ACCENT, text_color=TEXT, hover_color=ACCENT_HOVER)
             self.be_pips_toggle.configure(fg_color="transparent", text_color=MUTED, hover_color=BORDER)
         else:
-            self.be_pips_toggle.configure(fg_color=BLUE, text_color=TEXT, hover_color=BLUE_HOVER)
+            self.be_pips_toggle.configure(fg_color=ACCENT, text_color=TEXT, hover_color=ACCENT_HOVER)
             self.be_exact_toggle.configure(fg_color="transparent", text_color=MUTED, hover_color=BORDER)
         self._on_pips_entry_change(None)
 

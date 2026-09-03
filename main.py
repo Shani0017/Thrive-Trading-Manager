@@ -8,11 +8,11 @@ LOG_FILE = "mt5_trade_manager_error.log"
 
 def main():
     try:
+        import customtkinter as ctk
         import MetaTrader5 as mt5
         from gui import TradeManagerApp
 
-        root = tk.Tk()
-        root.geometry("820x420")
+        root = ctk.CTk()
         TradeManagerApp(root, mt5)
         root.mainloop()
     except Exception:

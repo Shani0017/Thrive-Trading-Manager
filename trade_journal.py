@@ -22,7 +22,12 @@ class TradeJournalApp:
         self.on_home = on_home
         self.root.title("Trading Journal")
         self.root.geometry("1120x760")
-        self.root.minsize(960, 600)
+        # 630px is the exact point below which the source-editor's hint
+        # label starts getting silently clipped (confirmed by direct
+        # measurement, bisecting window heights) -- the 4 fixed sections
+        # plus the closed-trades table's own natural minimum add up to
+        # just over that. 640 covers it with a small buffer.
+        self.root.minsize(960, 640)
         self.root.configure(fg_color=BG)
 
         self.date_range_days = 30
@@ -31,9 +36,20 @@ class TradeJournalApp:
         self.sources = load_sources()
         self.records = []
 
-        scroll = ctk.CTkScrollableFrame(root, fg_color=BG)
-        scroll.pack(fill="both", expand=True)
-        content = scroll
+        # Plain (non-scrolling) container, matching Trade Manager's layout
+        # fix: header/summary/filters/source-editor are packed with their
+        # natural height (no expand), so they always render in full no
+        # matter how short the window gets, and only the closed-trades
+        # table (packed with expand=True in _build_table) absorbs any extra
+        # or short space. content.pack_propagate(False) is what makes this
+        # work -- without it, content would resize itself to fit everything
+        # at natural size and drag the whole window along with it. A
+        # CTkScrollableFrame here previously meant shrinking the window hid
+        # the filters/source-editor behind a scrollbar, which is exactly
+        # the inconsistency being fixed (Trade Manager no longer does this).
+        content = ctk.CTkFrame(root, fg_color=BG)
+        content.pack(fill="both", expand=True)
+        content.pack_propagate(False)
 
         self._build_header(content)
         self._build_summary(content)
@@ -130,20 +146,37 @@ class TradeJournalApp:
                          font=("Segoe UI", 9, "bold"), borderwidth=0, relief="flat")
         style.map("Journal.Treeview.Heading", background=[("active", BORDER)])
         style.map("Journal.Treeview", background=[("selected", "#123322")], foreground=[("selected", TEXT)])
+        # Trade history can grow to hundreds of rows (unlike open positions,
+        # which are usually just a handful) -- without a scrollbar, only the
+        # first `height` rows were ever reachable, with no way to see older
+        # trades. Styled to match the dark theme rather than the default
+        # OS-native scrollbar chrome.
+        style.configure("Journal.Vertical.TScrollbar", background=CARD_ALT, troughcolor=CARD,
+                         bordercolor=CARD, arrowcolor=MUTED, relief="flat")
+        style.map("Journal.Vertical.TScrollbar", background=[("active", BORDER)])
 
         columns = ("date", "symbol", "direction", "volume", "entry", "exit", "pnl", "source")
         headings = {"date": "Date", "symbol": "Symbol", "direction": "Dir", "volume": "Volume",
                     "entry": "Entry", "exit": "Exit", "pnl": "P&L", "source": "Source"}
         self._column_weights = {"date": 0.15, "symbol": 0.11, "direction": 0.08, "volume": 0.08,
                                  "entry": 0.12, "exit": 0.12, "pnl": 0.11, "source": 0.23}
-        self.tree = ttk.Treeview(card, columns=columns, show="headings", height=8,
+
+        tree_wrap = ctk.CTkFrame(card, fg_color="transparent")
+        tree_wrap.pack(fill="both", expand=True, padx=14, pady=(0, 6))
+
+        self.tree = ttk.Treeview(tree_wrap, columns=columns, show="headings", height=8,
                                   style="Journal.Treeview")
         for col in columns:
             self.tree.heading(col, text=headings[col])
             self.tree.column(col, anchor="center", stretch=False, width=80)
         self.tree.tag_configure("win", foreground=GREEN)
         self.tree.tag_configure("loss", foreground=RED)
-        self.tree.pack(fill="both", expand=True, padx=14, pady=(0, 6))
+
+        tree_scroll = ttk.Scrollbar(tree_wrap, orient="vertical", command=self.tree.yview,
+                                     style="Journal.Vertical.TScrollbar")
+        self.tree.configure(yscrollcommand=tree_scroll.set)
+        tree_scroll.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._on_select_trade)
         self.tree.bind("<Configure>", self._on_tree_resize)
 

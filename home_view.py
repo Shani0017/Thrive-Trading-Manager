@@ -1,6 +1,10 @@
+import queue
+import threading
+import webbrowser
 import customtkinter as ctk
 from PIL import Image
 from gui import BG, CARD, BORDER, TEXT, MUTED, ACCENT, ACCENT_HOVER, _resource_path
+from update_check import fetch_latest_release, is_newer, APP_VERSION
 
 
 class HomeScreen:
@@ -29,6 +33,9 @@ class HomeScreen:
 
         self._resize_job = None
         self._current_scale = 1.0
+        self._update_banner = None
+        self._update_poll_job = None
+        self._update_result_queue = queue.Queue()
 
         container = ctk.CTkFrame(root, fg_color=BG)
         container.pack(fill="both", expand=True)
@@ -71,6 +78,42 @@ class HomeScreen:
 
         self.root.bind("<Configure>", self._on_root_resize)
 
+        # The GitHub API call is real network I/O -- it must never run on
+        # the Tk main thread (would freeze the whole UI while it waits).
+        # The worker thread only ever touches the thread-safe queue, never
+        # a widget directly; _poll_update_queue (running via root.after on
+        # the main thread) is the only thing that ever updates the UI,
+        # which sidesteps Tkinter's general unsafety with cross-thread
+        # widget calls.
+        threading.Thread(target=self._check_for_update_worker, daemon=True).start()
+        self._update_poll_job = self.root.after(500, self._poll_update_queue)
+
+    def _check_for_update_worker(self):
+        result = fetch_latest_release()
+        if result is None:
+            return
+        tag, url = result
+        if is_newer(tag, APP_VERSION):
+            self._update_result_queue.put((tag, url))
+
+    def _poll_update_queue(self):
+        self._update_poll_job = None
+        try:
+            tag, url = self._update_result_queue.get_nowait()
+        except queue.Empty:
+            self._update_poll_job = self.root.after(500, self._poll_update_queue)
+            return
+        self._show_update_banner(tag, url)
+
+    def _show_update_banner(self, tag, url):
+        if self._update_banner is not None:
+            return
+        self._update_banner = ctk.CTkButton(
+            self.center, text=f"🔔 Version {tag} is available — click to download",
+            font=ctk.CTkFont(size=11), height=26, fg_color=ACCENT, hover_color=ACCENT_HOVER,
+            command=lambda: webbrowser.open(url))
+        self._update_banner.pack(pady=(0, 14), before=self.logo_label)
+
     def _make_choice_card(self, parent, title, subtitle, command):
         card = ctk.CTkFrame(parent, corner_radius=16, fg_color=CARD, border_width=1,
                              border_color=BORDER, width=self.BASE_CARD_SIZE[0],
@@ -106,6 +149,16 @@ class HomeScreen:
             except Exception:
                 pass
             self._resize_job = None
+        # The update-check poll loop reschedules itself every 500ms until
+        # a result shows up -- left running, it's the exact same dangling-
+        # timer bug just fixed for the resize job, just with a different
+        # trigger.
+        if self._update_poll_job is not None:
+            try:
+                self.root.after_cancel(self._update_poll_job)
+            except Exception:
+                pass
+            self._update_poll_job = None
         try:
             self.root.unbind("<Configure>")
         except Exception:

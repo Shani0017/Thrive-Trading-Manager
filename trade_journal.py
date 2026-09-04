@@ -20,7 +20,7 @@ class TradeJournalApp:
         self.root = root
         self.mt5 = mt5
         self.on_home = on_home
-        self.root.title("Trading Journal")
+        self.root.title("THRIVE Trading Journal")
         self.root.geometry("1120x760")
         # 630px is the exact point below which the source-editor's hint
         # label starts getting silently clipped (confirmed by direct

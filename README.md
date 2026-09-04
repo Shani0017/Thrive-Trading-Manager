@@ -1,4 +1,4 @@
-# MT5 Trade Manager
+# THRIVE Trade Manager
 
 Launches to a home screen with two tools:
 
@@ -29,7 +29,7 @@ app attaches to that running terminal, it does not log in on its own.
 build_exe.bat
 ```
 
-Produces a single file at `dist\MT5TradeManager.exe`. Send that one file to
+Produces a single file at `dist\THRIVE Trade Manager.exe`. Send that one file to
 anyone — they just need their own MT5 terminal open and logged in, nothing
 else to install.
 

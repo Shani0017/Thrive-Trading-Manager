@@ -366,9 +366,23 @@ class TradeManagerApp:
         style.map("Positions.Treeview", background=[("selected", "#1f3a5f")],
                   foreground=[("selected", TEXT)])
 
-    def _make_number_field(self, parent, width=80, step=0.1, decimals=5, default=""):
+    def _make_number_field(self, parent, width=80, step=0.1, decimals=5, default="",
+                            sign_fn=None, seed_fn=None):
         """A numeric entry with small +/- steppers, matching the reference
-        mockup's spinner inputs. Returns (frame, entry)."""
+        mockup's spinner inputs. Returns (frame, entry).
+
+        sign_fn (optional): called on every bump to get +1/-1, letting the
+        up-arrow mean different things depending on context -- e.g. for a
+        SELL position's Take Profit, "up" should actually decrease the
+        price (since TP must be BELOW current price to be valid, and lower
+        is more profit on a sell), not just add to whatever's typed.
+        Defaults to always +1 (up = increase), which is what plain fields
+        like the breakeven pips offset want.
+
+        seed_fn (optional): called to get a starting value when the field
+        is empty and a stepper is clicked -- without this, bumping from an
+        empty field starts at 0, which for a real price (e.g. Gold at
+        ~4436) needs dozens of clicks to reach anything meaningful."""
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         entry = ctk.CTkEntry(frame, width=width, height=26, border_color=BORDER,
                               fg_color=CARD, text_color=TEXT)
@@ -378,21 +392,26 @@ class TradeManagerApp:
         stepper = ctk.CTkFrame(frame, fg_color="transparent")
         stepper.pack(side="left", padx=(2, 0))
 
-        def _bump(delta):
-            try:
-                val = float(entry.get().strip() or 0)
-            except ValueError:
-                val = 0.0
+        def _bump(direction):
+            text = entry.get().strip()
+            if text:
+                try:
+                    val = float(text)
+                except ValueError:
+                    val = 0.0
+            else:
+                val = seed_fn() if seed_fn else 0.0
+            sign = sign_fn() if sign_fn else 1
             entry.delete(0, tk.END)
-            entry.insert(0, f"{val + delta:.{decimals}f}")
+            entry.insert(0, f"{val + step * sign * direction:.{decimals}f}")
             entry.event_generate("<KeyRelease>")
 
         ctk.CTkButton(stepper, text="▲", width=18, height=15, font=ctk.CTkFont(size=8),
                       fg_color=CARD, text_color=MUTED, hover_color=BORDER,
-                      command=lambda: _bump(step)).pack()
+                      command=lambda: _bump(1)).pack()
         ctk.CTkButton(stepper, text="▼", width=18, height=15, font=ctk.CTkFont(size=8),
                       fg_color=CARD, text_color=MUTED, hover_color=BORDER,
-                      command=lambda: _bump(-step)).pack()
+                      command=lambda: _bump(-1)).pack()
         return frame, entry
 
     def _build_detail_panel(self, root):
@@ -493,7 +512,9 @@ class TradeManagerApp:
                      text_color=RED).pack(anchor="w", padx=10, pady=(6, 4))
         sl_line = ctk.CTkFrame(sl_box, fg_color="transparent")
         sl_line.pack(fill="x", padx=10)
-        self.sl_field_frame, self.sl_entry = self._make_number_field(sl_line, width=64, step=0.1, decimals=5)
+        self.sl_field_frame, self.sl_entry = self._make_number_field(
+            sl_line, width=64, step=0.1, decimals=5,
+            sign_fn=lambda: self._sltp_sign("SL"), seed_fn=self._current_price_seed)
         self.sl_field_frame.pack(side="left")
         self.sl_entry.bind("<KeyRelease>", self._update_risk_reward)
         self.set_sl_btn = ctk.CTkButton(sl_line, text="Set", width=42, height=24,
@@ -510,7 +531,9 @@ class TradeManagerApp:
                      text_color=GREEN).pack(anchor="w", padx=10, pady=(6, 4))
         tp_line = ctk.CTkFrame(tp_box, fg_color="transparent")
         tp_line.pack(fill="x", padx=10)
-        self.tp_field_frame, self.tp_entry = self._make_number_field(tp_line, width=64, step=0.1, decimals=5)
+        self.tp_field_frame, self.tp_entry = self._make_number_field(
+            tp_line, width=64, step=0.1, decimals=5,
+            sign_fn=lambda: self._sltp_sign("TP"), seed_fn=self._current_price_seed)
         self.tp_field_frame.pack(side="left")
         self.tp_entry.bind("<KeyRelease>", self._update_risk_reward)
         self.set_tp_btn = ctk.CTkButton(tp_line, text="Set", width=42, height=24,
@@ -978,6 +1001,28 @@ class TradeManagerApp:
             self.be_apply_btn.configure(state="normal" if (valid and self._panel_enabled) else "disabled")
         else:
             self.be_apply_btn.configure(state="normal" if self._panel_enabled else "disabled")
+
+    def _sltp_sign(self, field: str) -> int:
+        """Which way the SL/TP stepper's up-arrow should move the number.
+        A SELL flips both fields relative to a BUY: validate_sltp requires
+        SL > current-price and TP < current-price for a SELL (the opposite
+        of a BUY), so "up" (toward a more valid/profitable value) means
+        decrease for a SELL's TP and increase for a SELL's SL. No position
+        selected defaults to +1 (up = increase) since the fields are
+        disabled in that state anyway."""
+        position = self.positions_by_ticket.get(self.selected_ticket) if self.selected_ticket else None
+        if position is None:
+            return 1
+        direction = "BUY" if position.type == self.mt5.POSITION_TYPE_BUY else "SELL"
+        if field == "TP":
+            return 1 if direction == "BUY" else -1
+        return 1 if direction == "SELL" else -1
+
+    def _current_price_seed(self) -> float:
+        """Starting value for the SL/TP steppers when their field is empty,
+        so a click lands near the real price instead of at 0."""
+        position = self.positions_by_ticket.get(self.selected_ticket) if self.selected_ticket else None
+        return position.price_current if position is not None else 0.0
 
     def _update_be_preview(self):
         position = self.positions_by_ticket.get(self.selected_ticket) if self.selected_ticket else None

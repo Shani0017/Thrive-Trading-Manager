@@ -22,19 +22,21 @@ class TradeJournalApp:
         self.on_home = on_home
         self.root.title("THRIVE Trading Journal")
         self.root.geometry("1120x760")
-        # 630px is the exact point below which the source-editor's hint
-        # label starts getting silently clipped (confirmed by direct
-        # measurement, bisecting window heights) -- the 4 fixed sections
-        # plus the closed-trades table's own natural minimum add up to
-        # just over that. 640 covers it with a small buffer.
-        self.root.minsize(960, 640)
+        # 450px is the exact point below which the table's own hint label
+        # starts getting silently clipped (confirmed by direct measurement,
+        # bisecting window heights) -- the 3 fixed sections (header,
+        # summary, filters) plus the closed-trades table's own natural
+        # minimum add up to just over that. Lower than before since
+        # removing the standalone source-editor panel (source is now
+        # edited inline in the table) shrank the fixed-section total.
+        self.root.minsize(960, 470)
         self.root.configure(fg_color=BG)
 
         self.date_range_days = 30
         self.symbol_filter = "All"
-        self.selected_position_id = None
         self.sources = load_sources()
         self.records = []
+        self._source_editor = None  # the inline Combobox, while a Source cell is being edited
 
         # Plain (non-scrolling) container, matching Trade Manager's layout
         # fix: header/summary/filters/source-editor are packed with their
@@ -55,7 +57,6 @@ class TradeJournalApp:
         self._build_summary(content)
         self._build_filters(content)
         self._build_table(content)
-        self._build_source_editor(content)
 
         self._load_and_refresh()
 
@@ -133,7 +134,7 @@ class TradeJournalApp:
 
     def _build_table(self, root):
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        card.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
         ctk.CTkLabel(card, text="CLOSED TRADES", font=ctk.CTkFont(size=10, weight="bold"),
                      text_color=MUTED).pack(anchor="w", padx=14, pady=(8, 4))
@@ -177,8 +178,13 @@ class TradeJournalApp:
         self.tree.configure(yscrollcommand=tree_scroll.set)
         tree_scroll.pack(side="right", fill="y")
         self.tree.pack(side="left", fill="both", expand=True)
-        self.tree.bind("<<TreeviewSelect>>", self._on_select_trade)
         self.tree.bind("<Configure>", self._on_tree_resize)
+        # Source is an optional per-trade note, not something every trade
+        # needs -- rather than a permanently-visible editor panel below the
+        # table, clicking directly on a row's Source cell opens an inline
+        # editor right there, matching how spreadsheet-style tables edit a
+        # single cell in place.
+        self.tree.bind("<Button-1>", self._on_tree_click)
 
         self.table_hint_label = ctk.CTkLabel(card, text="", font=ctk.CTkFont(size=11), text_color=MUTED)
         self.table_hint_label.pack(anchor="w", padx=14, pady=(0, 8))
@@ -190,76 +196,58 @@ class TradeJournalApp:
         for col, weight in self._column_weights.items():
             self.tree.column(col, width=max(40, int(total_width * weight)))
 
-    def _build_source_editor(self, root):
-        card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="x", padx=16, pady=(0, 12))
-        ctk.CTkLabel(card, text="TRADE SOURCE", font=ctk.CTkFont(size=10, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", padx=14, pady=(8, 4))
-        ctk.CTkLabel(card, text="Where did this trade idea come from? Select a closed trade above, "
-                                 "then type or pick a source.",
-                     font=ctk.CTkFont(size=10), text_color=MUTED, wraplength=900,
-                     justify="left").pack(anchor="w", padx=14, pady=(0, 6))
-
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=14)
-        self.source_entry = ctk.CTkEntry(row, width=220, height=26, placeholder_text="e.g. My Analysis, XYZ Trader...")
-        self.source_entry.pack(side="left")
-        self.save_source_btn = ctk.CTkButton(row, text="Save", width=60, height=26, fg_color=ACCENT,
-                                              hover_color=ACCENT_HOVER, command=self._save_source,
-                                              state="disabled")
-        self.save_source_btn.pack(side="left", padx=(8, 0))
-
-        quick_row = ctk.CTkFrame(card, fg_color="transparent")
-        quick_row.pack(fill="x", padx=14, pady=(6, 4))
-        self._quick_source_buttons = []
-        for label in QUICK_SOURCES:
-            btn = ctk.CTkButton(quick_row, text=label, height=22, font=ctk.CTkFont(size=9),
-                                 fg_color=CARD_ALT, hover_color=BORDER, text_color=TEXT,
-                                 state="disabled", command=lambda l=label: self._quick_set_source(l))
-            btn.pack(side="left", padx=(0, 6))
-            self._quick_source_buttons.append(btn)
-
-        self.source_hint_label = ctk.CTkLabel(card, text="Select a trade above to tag its source.",
-                                               font=ctk.CTkFont(size=10), text_color=MUTED)
-        self.source_hint_label.pack(anchor="w", padx=14, pady=(4, 8))
-
     # ------------------------------------------------------------------
 
-    def _quick_set_source(self, label):
-        self.source_entry.delete(0, tk.END)
-        self.source_entry.insert(0, label)
-        self._save_source()
-
-    def _save_source(self):
-        if self.selected_position_id is None:
+    def _on_tree_click(self, event):
+        self._close_source_editor()
+        if self.tree.identify_region(event.x, event.y) != "cell":
             return
-        value = self.source_entry.get().strip()
-        self.sources[str(self.selected_position_id)] = value
+        row_id = self.tree.identify_row(event.y)
+        if not row_id:
+            return
+        # identify_column returns a "#N" display-index string whose numbering
+        # convention (0- vs 1-based) isn't consistent across Tk versions --
+        # matching the click's x position against each column's own bbox
+        # sidesteps that entirely and is unambiguous.
+        source_bbox = self.tree.bbox(row_id, "source")
+        if source_bbox and source_bbox[0] <= event.x <= source_bbox[0] + source_bbox[2]:
+            self._open_source_editor(row_id)
+
+    def _open_source_editor(self, position_id: str):
+        bbox = self.tree.bbox(position_id, "source")
+        if not bbox:
+            return
+        x, y, width, height = bbox
+        current = self.sources.get(position_id, "")
+
+        editor = ttk.Combobox(self.tree, values=QUICK_SOURCES, font=("Segoe UI", 9))
+        editor.insert(0, current)
+        editor.select_range(0, tk.END)
+        editor.place(x=x, y=y, width=width, height=height)
+        editor.focus_set()
+        self._source_editor = editor
+
+        def commit(_event=None):
+            self._save_source(position_id, editor.get().strip())
+            self._close_source_editor()
+
+        def cancel(_event=None):
+            self._close_source_editor()
+
+        editor.bind("<Return>", commit)
+        editor.bind("<<ComboboxSelected>>", commit)
+        editor.bind("<Escape>", cancel)
+        editor.bind("<FocusOut>", commit)
+
+    def _close_source_editor(self):
+        if self._source_editor is not None:
+            editor, self._source_editor = self._source_editor, None
+            editor.destroy()
+
+    def _save_source(self, position_id: str, value: str):
+        self.sources[position_id] = value
         save_sources(self.sources)
-        self._render_table()
-        if value:
-            self.source_hint_label.configure(text=f'Saved: "{value}"', text_color=GREEN)
-        else:
-            self.source_hint_label.configure(text="Cleared.", text_color=MUTED)
-
-    def _on_select_trade(self, event):
-        selection = self.tree.selection()
-        if not selection:
-            self.selected_position_id = None
-            self.save_source_btn.configure(state="disabled")
-            for btn in self._quick_source_buttons:
-                btn.configure(state="disabled")
-            self.source_entry.delete(0, tk.END)
-            self.source_hint_label.configure(text="Select a trade above to tag its source.", text_color=MUTED)
-            return
-        position_id = selection[0]
-        self.selected_position_id = position_id
-        self.save_source_btn.configure(state="normal")
-        for btn in self._quick_source_buttons:
-            btn.configure(state="normal")
-        self.source_entry.delete(0, tk.END)
-        self.source_entry.insert(0, self.sources.get(position_id, ""))
-        self.source_hint_label.configure(text="", text_color=MUTED)
+        self.tree.set(position_id, "source", value or "—")
 
     def _load_and_refresh(self):
         now = datetime.now()

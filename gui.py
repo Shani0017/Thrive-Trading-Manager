@@ -265,6 +265,19 @@ class TradeManagerApp:
             self.root.clipboard_clear()
             self.root.clipboard_append(text)
 
+    def _sync_action_box_heights(self):
+        """Recomputes the shared fixed height for the 4 action boxes from
+        whichever box's content currently needs the most room, and applies
+        it to all of them. Must be re-run whenever any box's content can
+        change height after initial layout -- currently only Breakeven's
+        pips row (_set_be_mode), which is hidden at build time and so
+        isn't counted in the initial measurement."""
+        for content in self._action_box_contents:
+            content.update_idletasks()
+        row_height = max(content.winfo_reqheight() for content in self._action_box_contents)
+        for box in self._action_boxes:
+            box.configure(height=row_height)
+
     def _build_account_overview(self, root):
         # Now sits beside the chart (shares a row, roughly half window
         # width) instead of spanning the full window, so fill="both"/
@@ -273,11 +286,22 @@ class TradeManagerApp:
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
         card.pack(fill="both", expand=True)
 
-        ctk.CTkLabel(card, text="ACCOUNT OVERVIEW", font=ctk.CTkFont(size=11, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", padx=14, pady=(8, 4))
+        # This card shares the chart's (tall, variable) height, but its own
+        # content -- the header plus 3 stat rows -- has a fixed, much
+        # shorter natural height, which otherwise leaves it stuck at the
+        # top with dead space filling the rest of the card. `place()` at
+        # rely=0.5 centers it directly regardless of the card's actual
+        # height, sidestepping pack's expand/fill cavity math (which
+        # doesn't split space evenly across CTkFrame's composite internals
+        # -- confirmed by measuring actual widget geometry).
+        overview_content = ctk.CTkFrame(card, fg_color="transparent")
+        overview_content.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0)
 
-        grid = ctk.CTkFrame(card, fg_color="transparent")
-        grid.pack(fill="x", padx=14, pady=(0, 8))
+        ctk.CTkLabel(overview_content, text="ACCOUNT OVERVIEW", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color=MUTED).pack(anchor="center", padx=14, pady=(8, 4))
+
+        grid = ctk.CTkFrame(overview_content, fg_color="transparent")
+        grid.pack(padx=14, pady=(0, 8))
         grid.grid_columnconfigure(0, weight=1)
         grid.grid_columnconfigure(1, weight=1)
 
@@ -299,14 +323,13 @@ class TradeManagerApp:
 
     def _stat_cell(self, parent, label, row, col, colspan=1, with_pct=False):
         cell = ctk.CTkFrame(parent, fg_color="transparent")
-        cell.grid(row=row, column=col, columnspan=colspan, sticky="w", pady=(0, 6),
-                  padx=(0, 12) if col == 0 and colspan == 1 else 0)
-        ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=11), text_color=MUTED).pack(anchor="w")
+        cell.grid(row=row, column=col, columnspan=colspan, pady=(0, 6), padx=12)
+        ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=11), text_color=MUTED).pack(anchor="center")
         value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT)
-        value.pack(anchor="w", pady=(1, 0))
+        value.pack(anchor="center", pady=(1, 0))
         if with_pct:
             pct = ctk.CTkLabel(cell, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
-            pct.pack(anchor="w")
+            pct.pack(anchor="center")
             return value, pct
         return value
 
@@ -521,19 +544,23 @@ class TradeManagerApp:
         actions_row = ctk.CTkFrame(card, fg_color="transparent")
         actions_row.pack(fill="x", padx=14, pady=(0, 10))
 
-        # Each box's real content sits in an inner frame packed with
-        # expand=True and no fill -- pack centers a widget within any
-        # extra space it's given when expand=True/fill=off, so the
-        # (uneven, since Breakeven/Close Position naturally need more
-        # vertical room than Stop Loss/Take Profit) content ends up
-        # vertically centered in each box instead of stuck at the top
-        # with a dead gap below it (confirmed by user screenshot).
+        # All four boxes are given the SAME explicit height (computed below,
+        # in _sync_action_box_heights, from whichever box's content
+        # currently needs the most room -- normally Breakeven) via
+        # pack_propagate(False), and each box's content frame is
+        # `place()`-d at rely=0.5 to center it within that fixed height.
+        # This replaces an earlier attempt that packed content with
+        # expand=True and relied on pack's own cavity/anchor math to center
+        # it -- that turned out unreliable against CTkFrame's composite
+        # internals (confirmed by measuring actual widget geometry: the
+        # leftover space landed entirely on one side, not split evenly).
+        # An explicit fixed height + place() has no such ambiguity.
         be_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         be_box.pack(side="left", fill="both", expand=True, padx=(0, 8))
         be_content = ctk.CTkFrame(be_box, fg_color="transparent")
-        be_content.pack(fill="x", expand=True)
+        be_content.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0)
         ctk.CTkLabel(be_content, text="BREAKEVEN", font=ctk.CTkFont(size=11, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", padx=10, pady=(6, 4))
+                     text_color=MUTED).pack(anchor="center", padx=10, pady=(6, 4))
         toggle_row = ctk.CTkFrame(be_content, fg_color=CARD, corner_radius=8)
         toggle_row.pack(fill="x", padx=12)
         self.be_exact_toggle = ctk.CTkButton(toggle_row, text="Exact", height=24,
@@ -552,11 +579,13 @@ class TradeManagerApp:
         # explicitly re-insert it "before=apply_row", keeping visual order
         # correct regardless of how many times the mode's been toggled.
         self.be_offset_line = ctk.CTkFrame(be_box, fg_color="transparent")
+        be_offset_group = ctk.CTkFrame(self.be_offset_line, fg_color="transparent")
+        be_offset_group.pack(anchor="center")
         self.pips_offset_frame, self.pips_offset_entry = self._make_number_field(
-            self.be_offset_line, width=44, step=1.0, decimals=1, default="5")
+            be_offset_group, width=44, step=1.0, decimals=1, default="5")
         self.pips_offset_frame.pack(side="left")
         self.pips_offset_entry.bind("<KeyRelease>", self._on_pips_entry_change)
-        ctk.CTkLabel(self.be_offset_line, text="pips", font=ctk.CTkFont(size=11), text_color=MUTED).pack(
+        ctk.CTkLabel(be_offset_group, text="pips", font=ctk.CTkFont(size=11), text_color=MUTED).pack(
             side="left", padx=(6, 0))
 
         self.be_pip_note_label = ctk.CTkLabel(
@@ -570,19 +599,19 @@ class TradeManagerApp:
         self.be_apply_btn.pack(fill="x")
 
         ctk.CTkLabel(be_content, text="New SL if applied:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
-            anchor="w", padx=10, pady=(6, 0))
+            anchor="center", padx=10, pady=(6, 0))
         self.be_preview_value = ctk.CTkLabel(be_content, text="—", font=ctk.CTkFont(size=13, weight="bold"),
                                               text_color=GREEN)
-        self.be_preview_value.pack(anchor="w", padx=10, pady=(0, 6))
+        self.be_preview_value.pack(anchor="center", padx=10, pady=(0, 6))
 
         sl_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         sl_box.pack(side="left", fill="both", expand=True, padx=8)
         sl_content = ctk.CTkFrame(sl_box, fg_color="transparent")
-        sl_content.pack(fill="x", expand=True)
+        sl_content.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0)
         ctk.CTkLabel(sl_content, text="STOP LOSS", font=ctk.CTkFont(size=11, weight="bold"),
-                     text_color=RED).pack(anchor="w", padx=10, pady=(6, 4))
+                     text_color=RED).pack(anchor="center", padx=10, pady=(6, 4))
         sl_line = ctk.CTkFrame(sl_content, fg_color="transparent")
-        sl_line.pack(fill="x", padx=10)
+        sl_line.pack(anchor="center", padx=10)
         self.sl_field_frame, self.sl_entry = self._make_number_field(
             sl_line, width=64, step=0.1, decimals=lambda: self._price_decimals(self._selected_symbol()),
             sign_fn=lambda: self._sltp_sign("SL"), seed_fn=self._current_price_seed)
@@ -592,18 +621,18 @@ class TradeManagerApp:
                                          fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._on_set_sl)
         self.set_sl_btn.pack(side="left", padx=(6, 0))
         ctk.CTkLabel(sl_content, text="Current:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
-            anchor="w", padx=10, pady=(6, 0))
+            anchor="center", padx=10, pady=(6, 0))
         self.current_sl_label = ctk.CTkLabel(sl_content, text="—", font=ctk.CTkFont(size=12), text_color=TEXT)
-        self.current_sl_label.pack(anchor="w", padx=10, pady=(0, 6))
+        self.current_sl_label.pack(anchor="center", padx=10, pady=(0, 6))
 
         tp_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         tp_box.pack(side="left", fill="both", expand=True, padx=8)
         tp_content = ctk.CTkFrame(tp_box, fg_color="transparent")
-        tp_content.pack(fill="x", expand=True)
+        tp_content.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0)
         ctk.CTkLabel(tp_content, text="TAKE PROFIT", font=ctk.CTkFont(size=11, weight="bold"),
-                     text_color=GREEN).pack(anchor="w", padx=10, pady=(6, 4))
+                     text_color=GREEN).pack(anchor="center", padx=10, pady=(6, 4))
         tp_line = ctk.CTkFrame(tp_content, fg_color="transparent")
-        tp_line.pack(fill="x", padx=10)
+        tp_line.pack(anchor="center", padx=10)
         self.tp_field_frame, self.tp_entry = self._make_number_field(
             tp_line, width=64, step=0.1, decimals=lambda: self._price_decimals(self._selected_symbol()),
             sign_fn=lambda: self._sltp_sign("TP"), seed_fn=self._current_price_seed)
@@ -613,9 +642,9 @@ class TradeManagerApp:
                                          fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._on_set_tp)
         self.set_tp_btn.pack(side="left", padx=(6, 0))
         ctk.CTkLabel(tp_content, text="Current:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
-            anchor="w", padx=10, pady=(6, 0))
+            anchor="center", padx=10, pady=(6, 0))
         self.current_tp_label = ctk.CTkLabel(tp_content, text="—", font=ctk.CTkFont(size=12), text_color=TEXT)
-        self.current_tp_label.pack(anchor="w", padx=10, pady=(0, 6))
+        self.current_tp_label.pack(anchor="center", padx=10, pady=(0, 6))
 
         # Close Position gets a bit more visual weight (taller buttons,
         # more breathing room) than the other three boxes, on top of the
@@ -624,9 +653,9 @@ class TradeManagerApp:
         close_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         close_box.pack(side="left", fill="both", expand=True, padx=(8, 0))
         close_content = ctk.CTkFrame(close_box, fg_color="transparent")
-        close_content.pack(fill="x", expand=True)
+        close_content.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0)
         ctk.CTkLabel(close_content, text="CLOSE POSITION", font=ctk.CTkFont(size=11, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", padx=10, pady=(6, 6))
+                     text_color=MUTED).pack(anchor="center", padx=10, pady=(6, 6))
         self.half_close_btn = ctk.CTkButton(close_content, text="Half Close (50%)", height=30,
                                              fg_color=CARD, hover_color=BORDER, text_color=TEXT,
                                              border_width=1, border_color=BORDER,
@@ -642,7 +671,13 @@ class TradeManagerApp:
             variable=self.skip_confirm_var, font=ctk.CTkFont(size=11), text_color=MUTED,
             fg_color=ACCENT, hover_color=ACCENT_HOVER, border_color=BORDER,
             checkbox_width=14, checkbox_height=14)
-        self.skip_confirm_check.pack(anchor="w", padx=10, pady=(0, 6))
+        self.skip_confirm_check.pack(anchor="center", padx=10, pady=(0, 6))
+
+        self._action_boxes = (be_box, sl_box, tp_box, close_box)
+        self._action_box_contents = (be_content, sl_content, tp_content, close_content)
+        for box in self._action_boxes:
+            box.pack_propagate(False)
+        self._sync_action_box_heights()
 
         self.detail_result_banner = ctk.CTkFrame(card, corner_radius=8, fg_color=CARD)
         self.detail_result_banner.pack(fill="x", padx=14, pady=(0, 8))
@@ -1076,7 +1111,8 @@ class TradeManagerApp:
             # regardless of how many times pack_forget/pack has toggled
             # them -- a plain .pack() would just re-append at the end.
             self.be_offset_line.pack(fill="x", padx=10, pady=(4, 0), before=self.be_apply_row)
-            self.be_pip_note_label.pack(anchor="w", padx=10, pady=(2, 0), before=self.be_apply_row)
+            self.be_pip_note_label.pack(anchor="center", padx=10, pady=(2, 0), before=self.be_apply_row)
+        self._sync_action_box_heights()
         self._on_pips_entry_change(None)
 
     def _on_pips_entry_change(self, event):

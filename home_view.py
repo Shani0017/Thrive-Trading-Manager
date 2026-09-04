@@ -58,7 +58,7 @@ class HomeScreen:
         self.logo_label.pack(pady=(0, 20))
 
         self.subtitle_label = ctk.CTkLabel(self.center, text="What would you like to open?",
-                                            font=ctk.CTkFont(size=12), text_color=MUTED)
+                                            font=ctk.CTkFont(size=13), text_color=MUTED)
         self.subtitle_label.pack(pady=(0, 16))
 
         cards_row = ctk.CTkFrame(self.center, fg_color="transparent")
@@ -110,7 +110,7 @@ class HomeScreen:
             return
         self._update_banner = ctk.CTkButton(
             self.center, text=f"🔔 Version {tag} is available — click to download",
-            font=ctk.CTkFont(size=11), height=26, fg_color=ACCENT, hover_color=ACCENT_HOVER,
+            font=ctk.CTkFont(size=12), height=26, fg_color=ACCENT, hover_color=ACCENT_HOVER,
             command=lambda: webbrowser.open(url))
         self._update_banner.pack(pady=(0, 14), before=self.logo_label)
 
@@ -122,7 +122,7 @@ class HomeScreen:
         title_label = ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=14, weight="bold"),
                                     text_color=TEXT)
         title_label.pack(anchor="w", padx=16, pady=(16, 6))
-        subtitle_label = ctk.CTkLabel(card, text=subtitle, font=ctk.CTkFont(size=10), text_color=MUTED,
+        subtitle_label = ctk.CTkLabel(card, text=subtitle, font=ctk.CTkFont(size=11), text_color=MUTED,
                                        wraplength=194, justify="left")
         subtitle_label.pack(anchor="w", padx=16)
         button = ctk.CTkButton(card, text=f"Open {title}", height=24, fg_color=ACCENT,

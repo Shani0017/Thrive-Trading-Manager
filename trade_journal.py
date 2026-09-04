@@ -21,14 +21,12 @@ class TradeJournalApp:
         self.on_home = on_home
         self.root.title("THRIVE Trading Journal")
         self.root.geometry("1120x760")
-        # 450px is the exact point below which the table's own hint label
-        # starts getting silently clipped (confirmed by direct measurement,
-        # bisecting window heights) -- the 3 fixed sections (header,
-        # summary, filters) plus the closed-trades table's own natural
-        # minimum add up to just over that. Lower than before since
-        # removing the standalone source-editor panel (source is now
-        # edited inline in the table) shrank the fixed-section total.
-        self.root.minsize(960, 470)
+        # 488px is the exact point below which the table's own hint label
+        # starts getting silently clipped (re-measured after bumping up
+        # several font sizes for legibility, which increased every
+        # section's natural height -- was 450px before that). 500 covers
+        # it with a small buffer.
+        self.root.minsize(960, 500)
         self.root.configure(fg_color=BG)
 
         self.date_range_days = 30
@@ -64,7 +62,7 @@ class TradeJournalApp:
     def _build_header(self, root):
         bar = ctk.CTkFrame(root, fg_color="transparent")
         bar.pack(fill="x", padx=16, pady=(12, 8))
-        ctk.CTkButton(bar, text="← Home", width=72, height=24, font=ctk.CTkFont(size=10),
+        ctk.CTkButton(bar, text="← Home", width=72, height=24, font=ctk.CTkFont(size=11),
                       fg_color=CARD_ALT, hover_color=BORDER, text_color=TEXT,
                       command=self.on_home).pack(side="left")
         ctk.CTkLabel(bar, text="Trading Journal", font=ctk.CTkFont(size=15, weight="bold"),
@@ -83,7 +81,7 @@ class TradeJournalApp:
     def _summary_cell(self, parent, label):
         cell = ctk.CTkFrame(parent, fg_color="transparent")
         cell.pack(side="left", expand=True, fill="x")
-        ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=11), text_color=MUTED).pack(anchor="w")
+        ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=12), text_color=MUTED).pack(anchor="w")
         value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT)
         value.pack(anchor="w", pady=(1, 0))
         return value
@@ -94,17 +92,17 @@ class TradeJournalApp:
         inner = ctk.CTkFrame(bar, fg_color="transparent")
         inner.pack(fill="x", padx=12, pady=8)
 
-        ctk.CTkLabel(inner, text="Period", font=ctk.CTkFont(size=11), text_color=MUTED).pack(
+        ctk.CTkLabel(inner, text="Period", font=ctk.CTkFont(size=12), text_color=MUTED).pack(
             side="left", padx=(0, 8))
         self._period_buttons = {}
         for label, days in (("7D", 7), ("30D", 30), ("90D", 90), ("All", None)):
-            btn = ctk.CTkButton(inner, text=label, width=46, height=24, font=ctk.CTkFont(size=10),
+            btn = ctk.CTkButton(inner, text=label, width=46, height=24, font=ctk.CTkFont(size=11),
                                  command=lambda d=days: self._set_period(d))
             btn.pack(side="left", padx=4)
             self._period_buttons[days] = btn
         self._refresh_period_buttons()
 
-        ctk.CTkLabel(inner, text="Symbol", font=ctk.CTkFont(size=11), text_color=MUTED).pack(
+        ctk.CTkLabel(inner, text="Symbol", font=ctk.CTkFont(size=12), text_color=MUTED).pack(
             side="left", padx=(24, 8))
         self.symbol_menu = ctk.CTkOptionMenu(
             inner, values=["All"], width=110, height=24, fg_color=CARD_ALT, button_color=CARD_ALT,
@@ -142,15 +140,15 @@ class TradeJournalApp:
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
         card.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
-        ctk.CTkLabel(card, text="CLOSED TRADES", font=ctk.CTkFont(size=10, weight="bold"),
+        ctk.CTkLabel(card, text="CLOSED TRADES", font=ctk.CTkFont(size=11, weight="bold"),
                      text_color=MUTED).pack(anchor="w", padx=14, pady=(8, 4))
 
         style = ttk.Style()
         style.theme_use("clam")
         style.configure("Journal.Treeview", background=CARD, fieldbackground=CARD, foreground=TEXT,
-                         rowheight=22, font=("Segoe UI", 9), borderwidth=0)
+                         rowheight=26, font=("Segoe UI", 10), borderwidth=0)
         style.configure("Journal.Treeview.Heading", background=CARD_ALT, foreground=MUTED,
-                         font=("Segoe UI", 9, "bold"), borderwidth=0, relief="flat")
+                         font=("Segoe UI", 10, "bold"), borderwidth=0, relief="flat")
         style.map("Journal.Treeview.Heading", background=[("active", BORDER)])
         style.map("Journal.Treeview", background=[("selected", "#123322")], foreground=[("selected", TEXT)])
         # Trade history can grow to hundreds of rows (unlike open positions,
@@ -192,7 +190,7 @@ class TradeJournalApp:
         # single cell in place.
         self.tree.bind("<Button-1>", self._on_tree_click)
 
-        self.table_hint_label = ctk.CTkLabel(card, text="", font=ctk.CTkFont(size=11), text_color=MUTED)
+        self.table_hint_label = ctk.CTkLabel(card, text="", font=ctk.CTkFont(size=12), text_color=MUTED)
         self.table_hint_label.pack(anchor="w", padx=14, pady=(0, 8))
 
     def _on_tree_resize(self, event):
@@ -229,7 +227,7 @@ class TradeJournalApp:
         # Plain text entry, not a dropdown -- the source is free-form (any
         # trader/video/analysis name the user wants), and a Combobox implies
         # picking from a fixed list rather than typing whatever they like.
-        editor = tk.Entry(self.tree, font=("Segoe UI", 9), bg=CARD, fg=TEXT,
+        editor = tk.Entry(self.tree, font=("Segoe UI", 10), bg=CARD, fg=TEXT,
                            insertbackground=TEXT, relief="flat")
         editor.insert(0, current)
         editor.select_range(0, tk.END)

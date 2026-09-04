@@ -17,11 +17,20 @@ def _filling_type(mt5, symbol_info):
     IOC broke on brokers/symbols that don't support it; this picks FOK or
     IOC if the symbol allows it, falling back to Return (the safe default
     for symbols/brokers that support neither, e.g. many market-execution
-    setups) -- the same fallback order MT5's own documentation recommends."""
+    setups) -- the same fallback order MT5's own documentation recommends.
+
+    The bitmask flags themselves (1=FOK, 2=IOC, per MQL5's
+    ENUM_SYMBOL_TRADE_EXECUTION) are used as raw integers rather than
+    mt5.SYMBOL_FILLING_FOK/IOC -- the MetaTrader5 Python package doesn't
+    expose those as named constants, so referencing them raised
+    AttributeError (caught by the GUI's broad except and surfaced as the
+    unhelpful "Action failed (MT5 error)" on every Half/Full Close)."""
+    SYMBOL_FILLING_FOK = 1
+    SYMBOL_FILLING_IOC = 2
     mode = getattr(symbol_info, "filling_mode", 0) or 0
-    if mode & mt5.SYMBOL_FILLING_FOK:
+    if mode & SYMBOL_FILLING_FOK:
         return mt5.ORDER_FILLING_FOK
-    if mode & mt5.SYMBOL_FILLING_IOC:
+    if mode & SYMBOL_FILLING_IOC:
         return mt5.ORDER_FILLING_IOC
     return mt5.ORDER_FILLING_RETURN
 

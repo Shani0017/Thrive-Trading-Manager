@@ -1,11 +1,21 @@
 import pytest
 from unittest.mock import MagicMock
+import MetaTrader5 as real_mt5
 from actions import apply_breakeven, half_close, full_close, apply_custom_sltp, _filling_type
 
 
 @pytest.fixture
 def mock_mt5():
-    mt5 = MagicMock()
+    # spec=real_mt5 restricts the mock to attributes that actually exist on
+    # the real MetaTrader5 module -- both reading AND setting anything else
+    # raises AttributeError. Without this, a plain MagicMock() silently
+    # invents any attribute you touch (e.g. mt5.SYMBOL_FILLING_FOK, which
+    # doesn't exist on the real module), letting a real AttributeError bug
+    # in production code sail through every test undetected -- exactly what
+    # happened here: _filling_type referenced mt5.SYMBOL_FILLING_FOK/IOC,
+    # tests passed against a plain MagicMock, and it broke on the real app
+    # with "Action failed (MT5 error)" on every Half/Full Close.
+    mt5 = MagicMock(spec=real_mt5)
     mt5.POSITION_TYPE_BUY = 0
     mt5.POSITION_TYPE_SELL = 1
     mt5.ORDER_TYPE_BUY = 0
@@ -16,8 +26,6 @@ def mock_mt5():
     mt5.ORDER_FILLING_FOK = 0
     mt5.ORDER_FILLING_IOC = 1
     mt5.ORDER_FILLING_RETURN = 2
-    mt5.SYMBOL_FILLING_FOK = 1
-    mt5.SYMBOL_FILLING_IOC = 2
     mt5.TRADE_RETCODE_DONE = 10009
 
     symbol_info = MagicMock()

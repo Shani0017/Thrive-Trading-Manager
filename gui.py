@@ -123,7 +123,7 @@ class TradeManagerApp:
         # column caused real text truncation there).
         self._build_positions_panel(content)
 
-        self.chart_overview_row = chart_overview_row = ctk.CTkFrame(content, fg_color="transparent")
+        chart_overview_row = ctk.CTkFrame(content, fg_color="transparent")
         chart_overview_row.pack(fill="both", expand=True, padx=16, pady=(0, 8))
         chart_overview_row.pack_propagate(False)
 

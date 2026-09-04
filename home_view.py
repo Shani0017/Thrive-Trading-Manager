@@ -155,7 +155,7 @@ class HomeScreen:
         self._update_banner = ctk.CTkButton(
             self.center, text=f"🔔 Version {tag} is available — click to download",
             font=ctk.CTkFont(size=12), height=26, fg_color=ACCENT, hover_color=ACCENT_HOVER,
-            command=lambda: webbrowser.open(url))
+            text_color=TEXT, command=lambda: webbrowser.open(url))
         self._update_banner.pack(pady=(0, 14), before=self.logo_label)
 
     def _make_choice_card(self, parent, title, subtitle, command):
@@ -170,7 +170,7 @@ class HomeScreen:
                                        wraplength=194, justify="left")
         subtitle_label.pack(anchor="w", padx=16)
         button = ctk.CTkButton(card, text=f"Open {title}", height=24, fg_color=ACCENT,
-                                hover_color=ACCENT_HOVER, command=command)
+                                hover_color=ACCENT_HOVER, text_color=TEXT, command=command)
         button.pack(side="bottom", padx=16, pady=16, fill="x")
         return card, {"title": title_label, "subtitle": subtitle_label, "button": button}
 

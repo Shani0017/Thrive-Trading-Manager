@@ -24,12 +24,22 @@ CARD_ALT = "#141414"
 BORDER = "#242424"
 TEXT = "#ffffff"
 MUTED = "#9ca3af"
-ACCENT = "#22c55e"
-ACCENT_HOVER = "#16a34a"
+# ACCENT/DANGER are deliberately darker, more saturated shades than
+# GREEN/RED below -- they're button BACKGROUNDS paired with light button
+# TEXT on top, and the original lighter #22c55e/#f87171 pairing gave white
+# text only a ~2.3:1 / ~2.8:1 contrast ratio against them (WCAG AA needs
+# 4.5:1 for normal text), which read as "text on green/red buttons isn't
+# visible at all" per a direct user report. GREEN/RED themselves stay
+# light -- they're used as TEXT color against dark backgrounds elsewhere
+# (the BUY/SELL badge, P&L figures), where that contrast is correct as-is.
+ACCENT = "#15803d"
+ACCENT_HOVER = "#166534"
 GREEN = "#4ade80"
 GREEN_BG = "#123322"
 RED = "#f87171"
 RED_BG = "#3a1414"
+DANGER = "#dc2626"
+DANGER_HOVER = "#b91c1c"
 AMBER = "#fbbf24"
 AMBER_BG = "#3a2e0f"
 
@@ -594,7 +604,7 @@ class TradeManagerApp:
         self.be_apply_row = ctk.CTkFrame(be_content, fg_color="transparent")
         self.be_apply_row.pack(fill="x", padx=10, pady=(6, 0))
         self.be_apply_btn = ctk.CTkButton(self.be_apply_row, text="Apply", height=24,
-                                           fg_color=ACCENT, hover_color=ACCENT_HOVER,
+                                           fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT,
                                            command=self._on_breakeven_apply)
         self.be_apply_btn.pack(fill="x")
 
@@ -618,7 +628,8 @@ class TradeManagerApp:
         self.sl_field_frame.pack(side="left")
         self.sl_entry.bind("<KeyRelease>", self._update_risk_reward)
         self.set_sl_btn = ctk.CTkButton(sl_line, text="Set", width=42, height=24,
-                                         fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._on_set_sl)
+                                         fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT,
+                                         command=self._on_set_sl)
         self.set_sl_btn.pack(side="left", padx=(6, 0))
         ctk.CTkLabel(sl_content, text="Current:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
             anchor="center", padx=10, pady=(6, 0))
@@ -639,7 +650,8 @@ class TradeManagerApp:
         self.tp_field_frame.pack(side="left")
         self.tp_entry.bind("<KeyRelease>", self._update_risk_reward)
         self.set_tp_btn = ctk.CTkButton(tp_line, text="Set", width=42, height=24,
-                                         fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._on_set_tp)
+                                         fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT,
+                                         command=self._on_set_tp)
         self.set_tp_btn.pack(side="left", padx=(6, 0))
         ctk.CTkLabel(tp_content, text="Current:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
             anchor="center", padx=10, pady=(6, 0))
@@ -662,7 +674,7 @@ class TradeManagerApp:
                                              command=self._on_half_close)
         self.half_close_btn.pack(fill="x", padx=10, pady=(0, 6))
         self.full_close_btn = ctk.CTkButton(close_content, text="Full Close", height=30,
-                                             fg_color=RED, hover_color="#dc2626",
+                                             fg_color=DANGER, hover_color=DANGER_HOVER, text_color=TEXT,
                                              command=self._on_full_close)
         self.full_close_btn.pack(fill="x", padx=10, pady=(0, 8))
         self.skip_confirm_var = tk.BooleanVar(value=False)

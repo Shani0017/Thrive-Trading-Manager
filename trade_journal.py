@@ -115,7 +115,8 @@ class TradeJournalApp:
         # rightmost slice; each subsequent one takes the next slice to its
         # left).
         ctk.CTkButton(inner, text="Refresh", width=72, height=24, fg_color=ACCENT,
-                      hover_color=ACCENT_HOVER, command=self._load_and_refresh).pack(side="right")
+                      hover_color=ACCENT_HOVER, text_color=TEXT,
+                      command=self._load_and_refresh).pack(side="right")
         ctk.CTkButton(inner, text="Export CSV", width=90, height=24, fg_color=CARD_ALT,
                       hover_color=BORDER, text_color=TEXT,
                       command=self._export_csv).pack(side="right", padx=(0, 8))

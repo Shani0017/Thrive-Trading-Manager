@@ -335,8 +335,14 @@ class TradeManagerApp:
         if total_width <= 1 or height <= 1:
             return
         gap = 16  # the (0, 8) + (8, 0) padx between the two columns
-        chart_width = max(200, int((total_width - gap) * 0.64))
-        overview_width = max(160, total_width - gap - chart_width)
+        # Account Overview's 2-column grid only needs ~156px of natural
+        # width (confirmed by direct measurement) -- giving it a fixed 36%
+        # share of the row left most of it empty (visible as dead space to
+        # the right of the stat labels). Capping its width and handing
+        # everything else to the chart makes the chart the dominant,
+        # actually-useful element instead.
+        overview_width = min(340, max(220, int((total_width - gap) * 0.22)))
+        chart_width = max(200, total_width - gap - overview_width)
         # Height is also passed through (not just width): this row is the
         # one section packed with expand=True (see the content.pack_
         # propagate(False) comment in __init__), so it's the one that
@@ -560,13 +566,6 @@ class TradeManagerApp:
                                                text_color=MUTED)
         self.chart_title_label.pack(side="left")
 
-        self.chart_visible = True
-        self.chart_toggle_btn = ctk.CTkButton(header_row, text="Hide", width=44, height=20,
-                                               font=ctk.CTkFont(size=9), fg_color=CARD_ALT,
-                                               hover_color=BORDER, text_color=MUTED,
-                                               command=self._toggle_chart_visibility)
-        self.chart_toggle_btn.pack(side="right", padx=(6, 0))
-
         self.chart_timeframe = "M1"
         self._timeframe_buttons = {}
         tf_row = ctk.CTkFrame(header_row, fg_color=CARD_ALT, corner_radius=8)
@@ -589,21 +588,6 @@ class TradeManagerApp:
         self.chart_canvas.get_tk_widget().configure(bg=CARD, highlightthickness=0)
         self.chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=14, pady=(0, 10))
         self.chart_canvas.draw()
-
-    def _toggle_chart_visibility(self):
-        """Hides/shows just the chart canvas -- the header (title, timeframe
-        buttons, and this toggle) always stays visible so there's a way to
-        bring it back. Collapsing the canvas also shrinks the whole chart
-        card down to header height, handing that space back to whatever
-        else is on screen (e.g. the account overview keeps its own size
-        since it's a separate column, but the row overall needs less)."""
-        self.chart_visible = not self.chart_visible
-        if self.chart_visible:
-            self.chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=14, pady=(0, 10))
-            self.chart_toggle_btn.configure(text="Hide")
-        else:
-            self.chart_canvas.get_tk_widget().pack_forget()
-            self.chart_toggle_btn.configure(text="Show")
 
     def _refresh_timeframe_buttons(self):
         for tf, btn in self._timeframe_buttons.items():

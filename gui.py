@@ -521,11 +521,20 @@ class TradeManagerApp:
         actions_row = ctk.CTkFrame(card, fg_color="transparent")
         actions_row.pack(fill="x", padx=14, pady=(0, 10))
 
+        # Each box's real content sits in an inner frame packed with
+        # expand=True and no fill -- pack centers a widget within any
+        # extra space it's given when expand=True/fill=off, so the
+        # (uneven, since Breakeven/Close Position naturally need more
+        # vertical room than Stop Loss/Take Profit) content ends up
+        # vertically centered in each box instead of stuck at the top
+        # with a dead gap below it (confirmed by user screenshot).
         be_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         be_box.pack(side="left", fill="both", expand=True, padx=(0, 8))
-        ctk.CTkLabel(be_box, text="BREAKEVEN", font=ctk.CTkFont(size=11, weight="bold"),
+        be_content = ctk.CTkFrame(be_box, fg_color="transparent")
+        be_content.pack(fill="x", expand=True)
+        ctk.CTkLabel(be_content, text="BREAKEVEN", font=ctk.CTkFont(size=11, weight="bold"),
                      text_color=MUTED).pack(anchor="w", padx=10, pady=(6, 4))
-        toggle_row = ctk.CTkFrame(be_box, fg_color=CARD, corner_radius=8)
+        toggle_row = ctk.CTkFrame(be_content, fg_color=CARD, corner_radius=8)
         toggle_row.pack(fill="x", padx=12)
         self.be_exact_toggle = ctk.CTkButton(toggle_row, text="Exact", height=24,
                                               fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT,
@@ -551,26 +560,28 @@ class TradeManagerApp:
             side="left", padx=(6, 0))
 
         self.be_pip_note_label = ctk.CTkLabel(
-            be_box, text="1 pip = $0.10 (10 cents)", font=ctk.CTkFont(size=9), text_color=MUTED)
+            be_content, text="1 pip = $0.10 (10 cents)", font=ctk.CTkFont(size=9), text_color=MUTED)
 
-        self.be_apply_row = ctk.CTkFrame(be_box, fg_color="transparent")
+        self.be_apply_row = ctk.CTkFrame(be_content, fg_color="transparent")
         self.be_apply_row.pack(fill="x", padx=10, pady=(6, 0))
         self.be_apply_btn = ctk.CTkButton(self.be_apply_row, text="Apply", height=24,
                                            fg_color=ACCENT, hover_color=ACCENT_HOVER,
                                            command=self._on_breakeven_apply)
         self.be_apply_btn.pack(fill="x")
 
-        ctk.CTkLabel(be_box, text="New SL if applied:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
+        ctk.CTkLabel(be_content, text="New SL if applied:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
             anchor="w", padx=10, pady=(6, 0))
-        self.be_preview_value = ctk.CTkLabel(be_box, text="—", font=ctk.CTkFont(size=13, weight="bold"),
+        self.be_preview_value = ctk.CTkLabel(be_content, text="—", font=ctk.CTkFont(size=13, weight="bold"),
                                               text_color=GREEN)
         self.be_preview_value.pack(anchor="w", padx=10, pady=(0, 6))
 
         sl_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         sl_box.pack(side="left", fill="both", expand=True, padx=8)
-        ctk.CTkLabel(sl_box, text="STOP LOSS", font=ctk.CTkFont(size=11, weight="bold"),
+        sl_content = ctk.CTkFrame(sl_box, fg_color="transparent")
+        sl_content.pack(fill="x", expand=True)
+        ctk.CTkLabel(sl_content, text="STOP LOSS", font=ctk.CTkFont(size=11, weight="bold"),
                      text_color=RED).pack(anchor="w", padx=10, pady=(6, 4))
-        sl_line = ctk.CTkFrame(sl_box, fg_color="transparent")
+        sl_line = ctk.CTkFrame(sl_content, fg_color="transparent")
         sl_line.pack(fill="x", padx=10)
         self.sl_field_frame, self.sl_entry = self._make_number_field(
             sl_line, width=64, step=0.1, decimals=lambda: self._price_decimals(self._selected_symbol()),
@@ -580,16 +591,18 @@ class TradeManagerApp:
         self.set_sl_btn = ctk.CTkButton(sl_line, text="Set", width=42, height=24,
                                          fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._on_set_sl)
         self.set_sl_btn.pack(side="left", padx=(6, 0))
-        ctk.CTkLabel(sl_box, text="Current:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
+        ctk.CTkLabel(sl_content, text="Current:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
             anchor="w", padx=10, pady=(6, 0))
-        self.current_sl_label = ctk.CTkLabel(sl_box, text="—", font=ctk.CTkFont(size=12), text_color=TEXT)
+        self.current_sl_label = ctk.CTkLabel(sl_content, text="—", font=ctk.CTkFont(size=12), text_color=TEXT)
         self.current_sl_label.pack(anchor="w", padx=10, pady=(0, 6))
 
         tp_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         tp_box.pack(side="left", fill="both", expand=True, padx=8)
-        ctk.CTkLabel(tp_box, text="TAKE PROFIT", font=ctk.CTkFont(size=11, weight="bold"),
+        tp_content = ctk.CTkFrame(tp_box, fg_color="transparent")
+        tp_content.pack(fill="x", expand=True)
+        ctk.CTkLabel(tp_content, text="TAKE PROFIT", font=ctk.CTkFont(size=11, weight="bold"),
                      text_color=GREEN).pack(anchor="w", padx=10, pady=(6, 4))
-        tp_line = ctk.CTkFrame(tp_box, fg_color="transparent")
+        tp_line = ctk.CTkFrame(tp_content, fg_color="transparent")
         tp_line.pack(fill="x", padx=10)
         self.tp_field_frame, self.tp_entry = self._make_number_field(
             tp_line, width=64, step=0.1, decimals=lambda: self._price_decimals(self._selected_symbol()),
@@ -599,27 +612,33 @@ class TradeManagerApp:
         self.set_tp_btn = ctk.CTkButton(tp_line, text="Set", width=42, height=24,
                                          fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._on_set_tp)
         self.set_tp_btn.pack(side="left", padx=(6, 0))
-        ctk.CTkLabel(tp_box, text="Current:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
+        ctk.CTkLabel(tp_content, text="Current:", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
             anchor="w", padx=10, pady=(6, 0))
-        self.current_tp_label = ctk.CTkLabel(tp_box, text="—", font=ctk.CTkFont(size=12), text_color=TEXT)
+        self.current_tp_label = ctk.CTkLabel(tp_content, text="—", font=ctk.CTkFont(size=12), text_color=TEXT)
         self.current_tp_label.pack(anchor="w", padx=10, pady=(0, 6))
 
+        # Close Position gets a bit more visual weight (taller buttons,
+        # more breathing room) than the other three boxes, on top of the
+        # same vertical-centering treatment -- it's the highest-stakes
+        # action on this panel.
         close_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         close_box.pack(side="left", fill="both", expand=True, padx=(8, 0))
-        ctk.CTkLabel(close_box, text="CLOSE POSITION", font=ctk.CTkFont(size=11, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", padx=10, pady=(6, 4))
-        self.half_close_btn = ctk.CTkButton(close_box, text="Half Close (50%)", height=24,
+        close_content = ctk.CTkFrame(close_box, fg_color="transparent")
+        close_content.pack(fill="x", expand=True)
+        ctk.CTkLabel(close_content, text="CLOSE POSITION", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color=MUTED).pack(anchor="w", padx=10, pady=(6, 6))
+        self.half_close_btn = ctk.CTkButton(close_content, text="Half Close (50%)", height=30,
                                              fg_color=CARD, hover_color=BORDER, text_color=TEXT,
                                              border_width=1, border_color=BORDER,
                                              command=self._on_half_close)
-        self.half_close_btn.pack(fill="x", padx=10, pady=(0, 4))
-        self.full_close_btn = ctk.CTkButton(close_box, text="Full Close", height=24,
+        self.half_close_btn.pack(fill="x", padx=10, pady=(0, 6))
+        self.full_close_btn = ctk.CTkButton(close_content, text="Full Close", height=30,
                                              fg_color=RED, hover_color="#dc2626",
                                              command=self._on_full_close)
-        self.full_close_btn.pack(fill="x", padx=10, pady=(0, 5))
+        self.full_close_btn.pack(fill="x", padx=10, pady=(0, 8))
         self.skip_confirm_var = tk.BooleanVar(value=False)
         self.skip_confirm_check = ctk.CTkCheckBox(
-            close_box, text="Don't ask again",
+            close_content, text="Don't ask again",
             variable=self.skip_confirm_var, font=ctk.CTkFont(size=11), text_color=MUTED,
             fg_color=ACCENT, hover_color=ACCENT_HOVER, border_color=BORDER,
             checkbox_width=14, checkbox_height=14)

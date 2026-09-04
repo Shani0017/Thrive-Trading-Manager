@@ -68,16 +68,17 @@ class TradeManagerApp:
         self.mt5 = mt5
         self.on_home = on_home
         self.root.title("THRIVE Trade Manager")
-        self.root.geometry("1180x900")
-        # The 4 fixed sections (topbar, positions, detail panel, footer)
-        # plus the chart+account-overview row's own floor (it won't compress
-        # below ~200px without clipping the matplotlib figure or the stacked
-        # stat cells) add up to 892px -- confirmed by direct measurement:
-        # footer starts getting clipped below that height with no
-        # scrollbar to reach it. minsize enforces that floor at the OS
-        # level (with a small buffer) instead of silently letting content
-        # overflow past the window's edge.
-        self.root.minsize(1000, 900)
+        self.root.geometry("1180x980")
+        # The 4 fixed sections (topbar, positions, detail panel, footer) sum
+        # to ~661px, and Account Overview's 2-column grid of 5 stats (see
+        # _build_account_overview) needs ~265px of its own to show Balance,
+        # Equity, Margin, Free Margin, and Profit/Loss without any of them
+        # getting silently clipped (confirmed by direct measurement -- this
+        # is what was cutting off Free Margin/Profit-Loss below the ~900px
+        # window height this app shipped with before). 960 is that ~926px
+        # requirement plus a safety buffer; minsize enforces it at the OS
+        # level instead of letting content overflow past the window's edge.
+        self.root.minsize(1000, 960)
         self.root.configure(fg_color=BG)
         self.connected = False
         self.selected_ticket = None
@@ -240,22 +241,31 @@ class TradeManagerApp:
         ctk.CTkLabel(card, text="ACCOUNT OVERVIEW", font=ctk.CTkFont(size=10, weight="bold"),
                      text_color=MUTED).pack(anchor="w", padx=14, pady=(8, 4))
 
-        row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=14, pady=(0, 8))
+        grid = ctk.CTkFrame(card, fg_color="transparent")
+        grid.pack(fill="x", padx=14, pady=(0, 8))
+        grid.grid_columnconfigure(0, weight=1)
+        grid.grid_columnconfigure(1, weight=1)
 
-        self.balance_value = self._stat_cell(row, "Balance")
-        self.equity_value = self._stat_cell(row, "Equity")
-        self.margin_value = self._stat_cell(row, "Margin")
-        self.free_margin_value = self._stat_cell(row, "Free Margin")
-        self.profit_value, self.profit_pct_value = self._stat_cell(row, "Profit / Loss", with_pct=True)
+        # A 2-column grid (Balance/Equity, Margin/Free Margin, then P&L
+        # spanning both) rather than 5 fully-stacked rows: stacking all 5
+        # needs ~386px of natural height, comfortably more than this row
+        # ever has once it shares space with the chart -- the bottom
+        # stats (Free Margin, P&L) were silently clipped as a result. This
+        # halves the vertical footprint while staying visually distinct
+        # from the original single-row-of-5 layout that wasted horizontal
+        # space (the thing "make it vertical" was fixing in the first
+        # place).
+        self.balance_value = self._stat_cell(grid, "Balance", row=0, col=0)
+        self.equity_value = self._stat_cell(grid, "Equity", row=0, col=1)
+        self.margin_value = self._stat_cell(grid, "Margin", row=1, col=0)
+        self.free_margin_value = self._stat_cell(grid, "Free Margin", row=1, col=1)
+        self.profit_value, self.profit_pct_value = self._stat_cell(
+            grid, "Profit / Loss", row=2, col=0, colspan=2, with_pct=True)
 
-    def _stat_cell(self, parent, label, with_pct=False):
-        # Stacked as a vertical list (one stat per row) rather than side by
-        # side: since this card now shares half the window with the chart,
-        # a horizontal row of 5 cells left most of the card's height empty
-        # below it. Stacking fills that space usefully instead.
+    def _stat_cell(self, parent, label, row, col, colspan=1, with_pct=False):
         cell = ctk.CTkFrame(parent, fg_color="transparent")
-        cell.pack(fill="x", pady=(0, 5))
+        cell.grid(row=row, column=col, columnspan=colspan, sticky="w", pady=(0, 6),
+                  padx=(0, 12) if col == 0 and colspan == 1 else 0)
         ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=10), text_color=MUTED).pack(anchor="w")
         value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT)
         value.pack(anchor="w", pady=(1, 0))
@@ -328,10 +338,10 @@ class TradeManagerApp:
         chart_width = max(200, int((total_width - gap) * 0.64))
         overview_width = max(160, total_width - gap - chart_width)
         # Height is also passed through (not just width): this row is the
-        # one flexible grid row that shrinks/grows with the window (see the
-        # grid_rowconfigure(2, weight=1) comment in __init__), so both
-        # columns' actual height changes as the window is resized, not just
-        # their width.
+        # one section packed with expand=True (see the content.pack_
+        # propagate(False) comment in __init__), so it's the one that
+        # actually shrinks/grows as the window is resized -- both columns'
+        # height changes along with their width.
         self.chart_col.configure(width=chart_width, height=height)
         self.overview_col.configure(width=overview_width, height=height)
 

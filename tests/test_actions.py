@@ -34,6 +34,7 @@ def mock_mt5():
     symbol_info.volume_step = 0.01
     symbol_info.volume_min = 0.01
     symbol_info.filling_mode = 2  # broker supports IOC only, not FOK
+    symbol_info.trade_stops_level = 0  # no broker-imposed minimum SL/TP distance
     mt5.symbol_info.return_value = symbol_info
 
     tick = MagicMock()
@@ -97,6 +98,29 @@ def test_apply_breakeven_with_pips_sell_subtracts_offset(mock_mt5, sell_position
 
     sent = mock_mt5.order_send.call_args[0][0]
     assert sent["sl"] == pytest.approx(2299.70)
+
+
+def test_apply_breakeven_returns_result_and_no_error_on_success(mock_mt5, buy_position):
+    result, error = apply_breakeven(mock_mt5, buy_position, pips=0.0)
+
+    assert error is None
+    assert result.retcode == 10009
+
+
+def test_apply_breakeven_rejects_sl_too_close_to_current_price(mock_mt5, buy_position):
+    # Current price (tick.bid, since closing a BUY) is 2299.8, and entry is
+    # 2280.0 -- moving SL to exact breakeven (2280.0) is nowhere near
+    # 2299.8, so a real broker minimum wouldn't reject it. Set a stops
+    # level big enough (2000 points * 0.01 point = 20.0) to force the
+    # rejection deliberately and verify order_send is never called.
+    mock_mt5.symbol_info.return_value.trade_stops_level = 2000
+
+    result, error = apply_breakeven(mock_mt5, buy_position, pips=0.0)
+
+    assert result is None
+    assert error is not None
+    assert "too close" in error
+    mock_mt5.order_send.assert_not_called()
 
 
 def test_half_close_sends_half_volume_at_market(mock_mt5, buy_position):
@@ -206,3 +230,17 @@ def test_apply_custom_sltp_none_values_keep_existing(mock_mt5, buy_position):
     sent = mock_mt5.order_send.call_args[0][0]
     assert sent["sl"] == buy_position.sl
     assert sent["tp"] == buy_position.tp
+
+
+def test_apply_custom_sltp_rejects_sl_too_close_to_current_price(mock_mt5, buy_position):
+    # current price for a BUY close = bid = 2299.8; 2298.0 is on the valid
+    # (below-current) side per validate_sltp, but only 1.8 away -- well
+    # inside a broker minimum of 20.0 (2000 points * 0.01 point).
+    mock_mt5.symbol_info.return_value.trade_stops_level = 2000
+
+    result, error = apply_custom_sltp(mock_mt5, buy_position, sl=2298.0, tp=None)
+
+    assert result is None
+    assert error is not None
+    assert "too close" in error
+    mock_mt5.order_send.assert_not_called()

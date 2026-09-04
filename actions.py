@@ -1,4 +1,5 @@
-from trade_logic import pip_size, breakeven_price, half_close_volume, validate_sltp
+from trade_logic import (pip_size, breakeven_price, half_close_volume, validate_sltp,
+                          min_stop_distance, validate_stop_distance)
 
 
 def _direction(mt5, position) -> str:
@@ -37,18 +38,28 @@ def _filling_type(mt5, symbol_info):
 
 def apply_breakeven(mt5, position, pips: float = 0.0):
     """Moves SL to breakeven (pips=0) or breakeven+pips in the profitable
-    direction. TP is left untouched. Always sends -- there is no invalid
-    state for a breakeven move computed from the position's own entry price."""
+    direction. TP is left untouched. Returns (result, None) on success, or
+    (None, error_message) if the computed SL is too close to the current
+    market price per the broker's own minimum stop distance for this
+    symbol -- order_send is never called in that case. Without this check,
+    a too-small breakeven+pips offset (or a fast-moving market) got
+    rejected by the broker with retcode 10016 ("Invalid stops") instead of
+    a clear message (confirmed by a user screenshot of exactly this)."""
     symbol_info = mt5.symbol_info(position.symbol)
     direction = _direction(mt5, position)
     new_sl = breakeven_price(direction, position.price_open, pip_size(symbol_info), pips)
-    return mt5.order_send({
+    current_price = _closing_price(mt5, position, direction)
+    error = validate_stop_distance(current_price, new_sl, None, min_stop_distance(symbol_info))
+    if error:
+        return None, error
+    result = mt5.order_send({
         "action": mt5.TRADE_ACTION_SLTP,
         "position": position.ticket,
         "symbol": position.symbol,
         "sl": round(new_sl, symbol_info.digits),
         "tp": position.tp,
     })
+    return result, None
 
 
 def half_close(mt5, position):
@@ -105,6 +116,9 @@ def apply_custom_sltp(mt5, position, sl: float | None, tp: float | None):
     if error:
         return None, error
     symbol_info = mt5.symbol_info(position.symbol)
+    error = validate_stop_distance(current_price, sl, tp, min_stop_distance(symbol_info))
+    if error:
+        return None, error
     result = mt5.order_send({
         "action": mt5.TRADE_ACTION_SLTP,
         "position": position.ticket,

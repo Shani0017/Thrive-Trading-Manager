@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
-from trade_logic import pip_size, breakeven_price, half_close_volume, validate_sltp
+from trade_logic import (pip_size, breakeven_price, half_close_volume, validate_sltp,
+                          min_stop_distance, validate_stop_distance)
 
 
 def _symbol_info(digits, point):
@@ -105,3 +106,44 @@ def test_validate_sltp_sell_valid_values_accepted():
 
 def test_validate_sltp_none_values_always_valid():
     assert validate_sltp("BUY", current_price=2300.0, sl=None, tp=None) is None
+
+
+def test_min_stop_distance_computes_points_times_point():
+    info = _symbol_info(digits=2, point=0.01)
+    info.trade_stops_level = 50
+    assert min_stop_distance(info) == pytest.approx(0.5)
+
+
+def test_min_stop_distance_zero_when_broker_reports_no_minimum():
+    info = _symbol_info(digits=5, point=0.00001)
+    info.trade_stops_level = 0
+    assert min_stop_distance(info) == 0
+
+
+def test_min_stop_distance_defaults_to_zero_when_attribute_missing():
+    # A bare MagicMock() without trade_stops_level explicitly set would
+    # otherwise auto-vivify a Mock instead of falling back to 0.
+    info = MagicMock(spec=["digits", "point"])
+    info.digits = 2
+    info.point = 0.01
+    assert min_stop_distance(info) == 0
+
+
+def test_validate_stop_distance_rejects_sl_too_close():
+    error = validate_stop_distance(current_price=2300.0, sl=2299.9, tp=None, min_distance=0.5)
+    assert error is not None
+    assert "SL" in error
+
+
+def test_validate_stop_distance_rejects_tp_too_close():
+    error = validate_stop_distance(current_price=2300.0, sl=None, tp=2300.3, min_distance=0.5)
+    assert error is not None
+    assert "TP" in error
+
+
+def test_validate_stop_distance_accepts_far_enough_values():
+    assert validate_stop_distance(current_price=2300.0, sl=2280.0, tp=2320.0, min_distance=0.5) is None
+
+
+def test_validate_stop_distance_zero_minimum_always_passes():
+    assert validate_stop_distance(current_price=2300.0, sl=2299.99, tp=2300.01, min_distance=0) is None

@@ -54,3 +54,29 @@ def validate_sltp(direction: str, current_price: float, sl: float | None, tp: fl
         if tp is not None and tp >= current_price:
             return "For a SELL, TP must be below the current price."
     return None
+
+
+def min_stop_distance(symbol_info) -> float:
+    """Minimum distance (in price units, not pips) MT5 requires between a
+    SL/TP and the current market price. symbol_info.trade_stops_level is
+    this distance in points, set by the broker per-symbol -- a value too
+    close gets rejected by the broker with retcode 10016 ("Invalid
+    stops") instead of a clear client-side message. Many brokers report 0
+    (no extra minimum beyond the basic above/below-current-price rule
+    validate_sltp already covers)."""
+    stops_level = getattr(symbol_info, "trade_stops_level", 0) or 0
+    return stops_level * symbol_info.point
+
+
+def validate_stop_distance(current_price: float, sl: float | None, tp: float | None,
+                            min_distance: float) -> str | None:
+    """Returns an error message if sl/tp is closer to current_price than
+    min_distance allows, or None if both clear it (or min_distance is 0,
+    meaning the broker imposes no extra minimum for this symbol)."""
+    if min_distance <= 0:
+        return None
+    if sl is not None and abs(current_price - sl) < min_distance:
+        return f"SL is too close to the current price (must be at least {min_distance:g} away)."
+    if tp is not None and abs(current_price - tp) < min_distance:
+        return f"TP is too close to the current price (must be at least {min_distance:g} away)."
+    return None

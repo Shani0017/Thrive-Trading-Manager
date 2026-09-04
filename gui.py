@@ -1166,9 +1166,12 @@ class TradeManagerApp:
             self._set_detail_result("Position no longer open.", "error")
             return
         try:
-            result = apply_breakeven(self.mt5, position, pips=pips)
+            result, error = apply_breakeven(self.mt5, position, pips=pips)
         except Exception:
             self._set_detail_result("Action failed (MT5 error).", "error")
+            return
+        if error:
+            self._set_detail_result(error, "error")
             return
         msg = "SL moved to breakeven." if pips == 0 else f"SL moved to breakeven +{pips:g} pips."
         self._show_result(result, msg)

@@ -40,6 +40,41 @@ _TONE_STYLES = {
     "neutral": (CARD_ALT, MUTED),
 }
 
+# Plain-English explanations for MT5's own trade-server return codes,
+# keyed by the raw integer (not mt5.TRADE_RETCODE_* constants -- result.
+# retcode is always a real number from the server regardless of which
+# names the Python wrapper happens to expose, so matching on the literal
+# value avoids any risk of referencing a nonexistent attribute). Covers
+# the codes plausible for the actions this app actually performs
+# (breakeven/SL/TP modify, half/full close); anything not listed here
+# falls back to showing the raw code and the broker's own comment.
+_RETCODE_MESSAGES = {
+    10004: "Price moved before the order could be filled (requote). Try again.",
+    10006: "The broker rejected this request.",
+    10007: "The request was canceled.",
+    10011: "The broker's trade server reported an error processing this request.",
+    10012: "The request timed out. Check your connection and try again.",
+    10013: "Invalid request.",
+    10014: "Invalid volume for this symbol.",
+    10015: "Invalid price.",
+    10016: "SL/TP is too close to the current price, or on the wrong side of it, for this broker.",
+    10017: "Trading is disabled for this account or symbol right now.",
+    10018: "The market for this symbol is closed.",
+    10019: "Not enough money in the account for this action.",
+    10020: "The price changed before this order could be sent. Try again.",
+    10021: "No quotes are available for this symbol right now.",
+    10024: "Too many requests sent too quickly. Wait a moment and try again.",
+    10025: "No changes were made -- the SL/TP already matches this value.",
+    10026: "Autotrading is disabled on the trade server.",
+    10027: "Autotrading (Algo Trading) is disabled in this MT5 terminal.",
+    10028: "This request is locked and can't be processed right now. Try again shortly.",
+    10029: "This position can't be modified right now (frozen by the broker).",
+    10030: "This order's fill type isn't supported by the broker.",
+    10031: "No connection to the trade server. Check that MT5 is connected.",
+    10036: "This position is already closed.",
+    10044: "This symbol only allows closing existing positions, not modifying them.",
+}
+
 
 def _resource_path(relative_path: str) -> str:
     """Resolves a bundled asset both in normal dev runs and inside a
@@ -1145,8 +1180,13 @@ class TradeManagerApp:
                 f"Partially filled — {success_message} Check remaining volume before retrying.",
                 "warning")
         else:
-            self._set_detail_result(
-                f"Broker rejected: {result.retcode} {getattr(result, 'comment', '')}", "error")
+            friendly = _RETCODE_MESSAGES.get(result.retcode)
+            if friendly:
+                self._set_detail_result(friendly, "error")
+            else:
+                comment = getattr(result, "comment", "") or ""
+                detail = f": {comment}" if comment else ""
+                self._set_detail_result(f"Broker rejected the request (code {result.retcode}{detail}).", "error")
 
     def _on_breakeven_apply(self):
         if self.selected_ticket is None:

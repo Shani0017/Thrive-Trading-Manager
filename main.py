@@ -10,11 +10,22 @@ def main():
     try:
         import customtkinter as ctk
         import MetaTrader5 as mt5
-        from gui import TradeManagerApp
+        from gui import TradeManagerApp, _resource_path
         from trade_journal import TradeJournalApp
         from home_view import HomeScreen
 
         root = ctk.CTk()
+        # This is the window's own title-bar icon (top-left corner, and
+        # Alt+Tab on some setups) -- a separate thing from the .exe file's
+        # icon, which is embedded by PyInstaller's --icon flag and was
+        # already fixed. Without this, Tkinter shows a generic default
+        # icon regardless of what the exe's file icon looks like. Set once
+        # here since root is the single Tk window reused across every page
+        # (Home/Trade Manager/Journal just swap its contents).
+        try:
+            root.iconbitmap(_resource_path("assets/icon.ico"))
+        except Exception:
+            pass
 
         def clear_root():
             for widget in root.winfo_children():

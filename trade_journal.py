@@ -1,5 +1,6 @@
+import csv
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, filedialog, messagebox
 from datetime import datetime, timedelta
 import customtkinter as ctk
 from gui import BG, CARD, CARD_ALT, BORDER, TEXT, MUTED, ACCENT, ACCENT_HOVER, GREEN, RED
@@ -113,8 +114,15 @@ class TradeJournalApp:
             command=self._on_symbol_filter_change)
         self.symbol_menu.pack(side="left")
 
+        # Packed side="right" in this order so "Export CSV" reads to the
+        # left of "Refresh" (the first side="right" widget claims the
+        # rightmost slice; each subsequent one takes the next slice to its
+        # left).
         ctk.CTkButton(inner, text="Refresh", width=72, height=24, fg_color=ACCENT,
                       hover_color=ACCENT_HOVER, command=self._load_and_refresh).pack(side="right")
+        ctk.CTkButton(inner, text="Export CSV", width=90, height=24, fg_color=CARD_ALT,
+                      hover_color=BORDER, text_color=TEXT,
+                      command=self._export_csv).pack(side="right", padx=(0, 8))
 
     def _refresh_period_buttons(self):
         for days, btn in self._period_buttons.items():
@@ -267,10 +275,44 @@ class TradeJournalApp:
 
         self._render_table()
 
+    def _filtered_records(self):
+        return [r for r in self.records
+                if self.symbol_filter == "All" or r["symbol"] == self.symbol_filter]
+
+    def _export_csv(self):
+        filtered = self._filtered_records()
+        if not filtered:
+            messagebox.showinfo("Export CSV", "No closed trades to export for the current filters.")
+            return
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv", filetypes=[("CSV files", "*.csv")],
+            initialfile="trading_journal_export.csv", title="Export Trading Journal to CSV")
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Date", "Symbol", "Direction", "Volume", "Entry", "Exit", "P&L", "Source"])
+                for r in filtered:
+                    date_str = datetime.fromtimestamp(r["close_time"]).strftime("%Y-%m-%d %H:%M")
+                    source = self.sources.get(str(r["position_id"]), "")
+                    writer.writerow([date_str, r["symbol"], r["direction"], r["volume"],
+                                      r["entry_price"], r["exit_price"], r["pnl"], source])
+        except OSError as e:
+            messagebox.showerror("Export CSV", f"Failed to export:\n{e}")
+            return
+        # A plain CSV opens directly via Google Sheets' own File > Import --
+        # no Google API/OAuth setup needed, which matters since this is a
+        # personal, single-user tool rather than something with a live
+        # shared sheet to push into.
+        messagebox.showinfo(
+            "Export CSV",
+            f"Exported {len(filtered)} trade(s) to:\n{path}\n\n"
+            "Open Google Sheets and use File > Import to bring this in.")
+
     def _render_table(self):
         self.tree.delete(*self.tree.get_children())
-        filtered = [r for r in self.records
-                    if self.symbol_filter == "All" or r["symbol"] == self.symbol_filter]
+        filtered = self._filtered_records()
 
         total_pnl = sum(r["pnl"] for r in filtered)
         wins = sum(1 for r in filtered if r["pnl"] > 0)

@@ -10,6 +10,22 @@ def _closing_price(mt5, position, direction: str) -> float:
     return tick.bid if direction == "BUY" else tick.ask
 
 
+def _filling_type(mt5, symbol_info):
+    """MT5 rejects an order (retcode 10030, "Unsupported filling mode") if
+    its type_filling isn't one the broker/symbol actually accepts --
+    symbol_info.filling_mode is a bitmask of what's allowed. Hardcoding
+    IOC broke on brokers/symbols that don't support it; this picks FOK or
+    IOC if the symbol allows it, falling back to Return (the safe default
+    for symbols/brokers that support neither, e.g. many market-execution
+    setups) -- the same fallback order MT5's own documentation recommends."""
+    mode = getattr(symbol_info, "filling_mode", 0) or 0
+    if mode & mt5.SYMBOL_FILLING_FOK:
+        return mt5.ORDER_FILLING_FOK
+    if mode & mt5.SYMBOL_FILLING_IOC:
+        return mt5.ORDER_FILLING_IOC
+    return mt5.ORDER_FILLING_RETURN
+
+
 def apply_breakeven(mt5, position, pips: float = 0.0):
     """Moves SL to breakeven (pips=0) or breakeven+pips in the profitable
     direction. TP is left untouched. Always sends -- there is no invalid
@@ -46,13 +62,14 @@ def half_close(mt5, position):
         "price": _closing_price(mt5, position, direction),
         "deviation": 20,
         "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": mt5.ORDER_FILLING_IOC,
+        "type_filling": _filling_type(mt5, symbol_info),
     })
 
 
 def full_close(mt5, position):
     """Closes the entire position at market. The caller (GUI) is
     responsible for confirming with the user before calling this."""
+    symbol_info = mt5.symbol_info(position.symbol)
     direction = _direction(mt5, position)
     close_type = mt5.ORDER_TYPE_SELL if direction == "BUY" else mt5.ORDER_TYPE_BUY
     return mt5.order_send({
@@ -64,7 +81,7 @@ def full_close(mt5, position):
         "price": _closing_price(mt5, position, direction),
         "deviation": 20,
         "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": mt5.ORDER_FILLING_IOC,
+        "type_filling": _filling_type(mt5, symbol_info),
     })
 
 

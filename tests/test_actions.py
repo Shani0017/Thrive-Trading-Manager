@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from actions import apply_breakeven, half_close, full_close, apply_custom_sltp
+from actions import apply_breakeven, half_close, full_close, apply_custom_sltp, _filling_type
 
 
 @pytest.fixture
@@ -13,7 +13,11 @@ def mock_mt5():
     mt5.TRADE_ACTION_DEAL = 1
     mt5.TRADE_ACTION_SLTP = 6
     mt5.ORDER_TIME_GTC = 1
+    mt5.ORDER_FILLING_FOK = 0
     mt5.ORDER_FILLING_IOC = 1
+    mt5.ORDER_FILLING_RETURN = 2
+    mt5.SYMBOL_FILLING_FOK = 1
+    mt5.SYMBOL_FILLING_IOC = 2
     mt5.TRADE_RETCODE_DONE = 10009
 
     symbol_info = MagicMock()
@@ -21,6 +25,7 @@ def mock_mt5():
     symbol_info.point = 0.01
     symbol_info.volume_step = 0.01
     symbol_info.volume_min = 0.01
+    symbol_info.filling_mode = 2  # broker supports IOC only, not FOK
     mt5.symbol_info.return_value = symbol_info
 
     tick = MagicMock()
@@ -96,7 +101,26 @@ def test_half_close_sends_half_volume_at_market(mock_mt5, buy_position):
     assert sent["price"] == 2299.8  # bid, since closing a BUY
     assert sent["position"] == 12345
     assert sent["symbol"] == "XAUUSD"
+    assert sent["type_filling"] == mock_mt5.ORDER_FILLING_IOC  # symbol supports IOC (fixture: filling_mode=2)
     assert result.retcode == 10009
+
+
+def test_filling_type_prefers_fok_when_supported(mock_mt5):
+    symbol_info = MagicMock()
+    symbol_info.filling_mode = 1  # SYMBOL_FILLING_FOK only
+    assert _filling_type(mock_mt5, symbol_info) == mock_mt5.ORDER_FILLING_FOK
+
+
+def test_filling_type_uses_ioc_when_fok_unsupported(mock_mt5):
+    symbol_info = MagicMock()
+    symbol_info.filling_mode = 2  # SYMBOL_FILLING_IOC only
+    assert _filling_type(mock_mt5, symbol_info) == mock_mt5.ORDER_FILLING_IOC
+
+
+def test_filling_type_falls_back_to_return_when_neither_supported(mock_mt5):
+    symbol_info = MagicMock()
+    symbol_info.filling_mode = 0  # neither bit set -- e.g. some market-execution brokers
+    assert _filling_type(mock_mt5, symbol_info) == mock_mt5.ORDER_FILLING_RETURN
 
 
 def test_half_close_returns_none_when_below_minimum(mock_mt5, buy_position):
@@ -115,6 +139,7 @@ def test_full_close_sends_full_volume_at_market(mock_mt5, buy_position):
     assert sent["type"] == mock_mt5.ORDER_TYPE_SELL
     assert sent["position"] == 12345
     assert sent["symbol"] == "XAUUSD"
+    assert sent["type_filling"] == mock_mt5.ORDER_FILLING_IOC  # symbol supports IOC (fixture: filling_mode=2)
 
 
 def test_full_close_sell_position_uses_buy_order_and_ask_price(mock_mt5, sell_position):

@@ -84,16 +84,27 @@ class HomeScreen:
                       font=ctk.CTkFont(size=11), fg_color=CARD, hover_color=BORDER,
                       text_color=MUTED, border_width=1, border_color=BORDER,
                       command=lambda: webbrowser.open(FEEDBACK_FORM_URL)).pack(side="left", padx=6)
+
+        # Pinned to the window's own top-right corner (via place(), not
+        # packed alongside the centered content) so it reads like it
+        # belongs up near the native minimize/close buttons -- as close to
+        # that as Tkinter allows, since those native title-bar buttons
+        # belong to Windows itself and can't have a widget added next to
+        # them without replacing the whole title bar. relx=1.0/rely=0.0
+        # with anchor="ne" keeps it flush to the corner on any resize,
+        # with no rescaling math needed (unlike self.center's contents).
+        top_right = ctk.CTkFrame(container, fg_color="transparent")
+        top_right.place(relx=1.0, rely=0.0, anchor="ne", x=-16, y=12)
         self.check_update_btn = ctk.CTkButton(
-            links_row, text="🔄 Check for Updates", width=160, height=26,
+            top_right, text="🔄 Check for Updates", width=160, height=26,
             font=ctk.CTkFont(size=11), fg_color=CARD, hover_color=BORDER,
             text_color=MUTED, border_width=1, border_color=BORDER,
             command=self._manual_check_for_update)
-        self.check_update_btn.pack(side="left", padx=6)
+        self.check_update_btn.pack(anchor="e")
 
-        self.update_status_label = ctk.CTkLabel(self.center, text="", font=ctk.CTkFont(size=10),
-                                                  text_color=MUTED)
-        self.update_status_label.pack(pady=(6, 0))
+        self.update_status_label = ctk.CTkLabel(top_right, text="", font=ctk.CTkFont(size=10),
+                                                  text_color=MUTED, justify="right")
+        self.update_status_label.pack(anchor="e", pady=(4, 0))
 
         self.root.bind("<Configure>", self._on_root_resize)
 

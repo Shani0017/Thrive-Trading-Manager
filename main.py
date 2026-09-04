@@ -45,7 +45,7 @@ def main():
             error_root = tk.Tk()
             error_root.withdraw()
             messagebox.showerror(
-                "MT5 Trade Manager — Startup Error",
+                "THRIVE Trade Manager — Startup Error",
                 "The app failed to start.\n\n" + error_text +
                 f"\n\nA log file was saved as {LOG_FILE} next to this program.",
             )

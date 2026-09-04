@@ -22,7 +22,7 @@ class HomeScreen:
 
     def __init__(self, root, on_open_manager, on_open_journal):
         self.root = root
-        self.root.title("MT5 Trade Manager")
+        self.root.title("THRIVE Trade Manager")
         self.root.geometry(f"{self.BASE_WIDTH}x{self.BASE_HEIGHT}")
         self.root.minsize(640, 440)
         self.root.configure(fg_color=BG)

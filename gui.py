@@ -67,9 +67,17 @@ class TradeManagerApp:
         self.root = root
         self.mt5 = mt5
         self.on_home = on_home
-        self.root.title("MT5 Trade Manager")
-        self.root.geometry("1180x800")
-        self.root.minsize(1000, 620)
+        self.root.title("THRIVE Trade Manager")
+        self.root.geometry("1180x900")
+        # The 4 fixed sections (topbar, positions, detail panel, footer)
+        # plus the chart+account-overview row's own floor (it won't compress
+        # below ~200px without clipping the matplotlib figure or the stacked
+        # stat cells) add up to 892px -- confirmed by direct measurement:
+        # footer starts getting clipped below that height with no
+        # scrollbar to reach it. minsize enforces that floor at the OS
+        # level (with a small buffer) instead of silently letting content
+        # overflow past the window's edge.
+        self.root.minsize(1000, 900)
         self.root.configure(fg_color=BG)
         self.connected = False
         self.selected_ticket = None
@@ -79,22 +87,28 @@ class TradeManagerApp:
         self._reconnect_job = None
         self._chart_job = None
 
-        # Scrollable outer container. The full stack of sections (topbar,
-        # account overview, chart, positions table, detail panel, footer)
-        # adds up to more vertical space than a typical laptop screen can
-        # show at once -- confirmed empirically: on a 1920x1200 screen this
-        # window's natural content height alone exceeds what's visible once
-        # window-manager chrome is accounted for. Rather than force the
-        # window ever-taller (which would just run off the top/bottom of
-        # smaller screens with no way to reach the rest), this scrolls.
-        # Width responsiveness -- which is what resizing the window actually
-        # needs day-to-day (the chart and columns reflowing wider/narrower)
-        # -- still works correctly inside a scrollable frame; only vertical
-        # "stretch to fill extra height" does not, which isn't very useful
-        # for a fixed-section dashboard like this one anyway.
-        scroll = ctk.CTkScrollableFrame(root, fg_color=BG)
-        scroll.pack(fill="both", expand=True)
-        content = scroll
+        # Plain (non-scrolling) container: every section the user acts on --
+        # topbar, open positions, breakeven/SL/TP/close, footer -- is packed
+        # with its natural height (no expand), so it always renders at full
+        # size no matter how short the window gets. Only the chart+account-
+        # overview row is packed with expand=True, so it alone absorbs
+        # whatever space is left over (or squeezed) once the fixed sections
+        # take theirs -- this is pack's standard "one expanding child soaks
+        # up the slack" behavior, which degrades gracefully (a smaller
+        # chart/stat panel) instead of clipping a button or field the user
+        # actually needs to click. content.pack_propagate(False) is what
+        # makes this work: without it, content resizes ITSELF to fit the
+        # combined natural height of everything packed into it, and since
+        # content is itself packed fill="both"/expand=True into root, that
+        # forces the whole window to snap back to that combined size
+        # regardless of what geometry() or the user's own resize says. This
+        # replaces an earlier CTkScrollableFrame approach: scrolling hid the
+        # action controls behind a scrollbar at smaller window sizes, which
+        # is exactly the "options disappear when I shrink the window"
+        # problem being fixed here.
+        content = ctk.CTkFrame(root, fg_color=BG)
+        content.pack(fill="both", expand=True)
+        content.pack_propagate(False)
 
         self._build_topbar(content)
 
@@ -108,8 +122,9 @@ class TradeManagerApp:
         # column caused real text truncation there).
         self._build_positions_panel(content)
 
-        chart_overview_row = ctk.CTkFrame(content, fg_color="transparent")
-        chart_overview_row.pack(fill="x", padx=16, pady=(0, 8))
+        self.chart_overview_row = chart_overview_row = ctk.CTkFrame(content, fg_color="transparent")
+        chart_overview_row.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        chart_overview_row.pack_propagate(False)
 
         # Both columns get pack_propagate(False) with widths recomputed as a
         # fixed proportion of the row's actual width on every resize (same
@@ -258,7 +273,7 @@ class TradeManagerApp:
         # leftover scroll space, turning a short table into a mostly-empty
         # box (the exact bug already fixed once before in this file).
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="x", anchor="n", padx=16, pady=(0, 8))
+        card.pack(fill="x", padx=16, pady=(0, 8))
 
         self.positions_title = ctk.CTkLabel(card, text="OPEN POSITIONS (0)",
                                              font=ctk.CTkFont(size=11, weight="bold"), text_color=MUTED)
@@ -306,13 +321,19 @@ class TradeManagerApp:
 
     def _on_chart_row_resize(self, event):
         total_width = event.width
-        if total_width <= 1:
+        height = event.height
+        if total_width <= 1 or height <= 1:
             return
         gap = 16  # the (0, 8) + (8, 0) padx between the two columns
         chart_width = max(200, int((total_width - gap) * 0.64))
         overview_width = max(160, total_width - gap - chart_width)
-        self.chart_col.configure(width=chart_width)
-        self.overview_col.configure(width=overview_width)
+        # Height is also passed through (not just width): this row is the
+        # one flexible grid row that shrinks/grows with the window (see the
+        # grid_rowconfigure(2, weight=1) comment in __init__), so both
+        # columns' actual height changes as the window is resized, not just
+        # their width.
+        self.chart_col.configure(width=chart_width, height=height)
+        self.overview_col.configure(width=overview_width, height=height)
 
     def _setup_treeview_style(self):
         """ttk.Treeview has no CustomTkinter equivalent (CTk provides no table
@@ -529,6 +550,13 @@ class TradeManagerApp:
                                                text_color=MUTED)
         self.chart_title_label.pack(side="left")
 
+        self.chart_visible = True
+        self.chart_toggle_btn = ctk.CTkButton(header_row, text="Hide", width=44, height=20,
+                                               font=ctk.CTkFont(size=9), fg_color=CARD_ALT,
+                                               hover_color=BORDER, text_color=MUTED,
+                                               command=self._toggle_chart_visibility)
+        self.chart_toggle_btn.pack(side="right", padx=(6, 0))
+
         self.chart_timeframe = "M1"
         self._timeframe_buttons = {}
         tf_row = ctk.CTkFrame(header_row, fg_color=CARD_ALT, corner_radius=8)
@@ -551,6 +579,21 @@ class TradeManagerApp:
         self.chart_canvas.get_tk_widget().configure(bg=CARD, highlightthickness=0)
         self.chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=14, pady=(0, 10))
         self.chart_canvas.draw()
+
+    def _toggle_chart_visibility(self):
+        """Hides/shows just the chart canvas -- the header (title, timeframe
+        buttons, and this toggle) always stays visible so there's a way to
+        bring it back. Collapsing the canvas also shrinks the whole chart
+        card down to header height, handing that space back to whatever
+        else is on screen (e.g. the account overview keeps its own size
+        since it's a separate column, but the row overall needs less)."""
+        self.chart_visible = not self.chart_visible
+        if self.chart_visible:
+            self.chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=14, pady=(0, 10))
+            self.chart_toggle_btn.configure(text="Hide")
+        else:
+            self.chart_canvas.get_tk_widget().pack_forget()
+            self.chart_toggle_btn.configure(text="Show")
 
     def _refresh_timeframe_buttons(self):
         for tf, btn in self._timeframe_buttons.items():
@@ -587,7 +630,7 @@ class TradeManagerApp:
         self.footer_ping_label = ctk.CTkLabel(bar, text="Ping: —", font=ctk.CTkFont(size=10),
                                                text_color=MUTED)
         self.footer_ping_label.pack(side="left", padx=(16, 0))
-        ctk.CTkLabel(bar, text="MT5 Trade Manager", font=ctk.CTkFont(size=10),
+        ctk.CTkLabel(bar, text="THRIVE Trade Manager", font=ctk.CTkFont(size=10),
                      text_color=MUTED).pack(side="right")
 
     # ------------------------------------------------------------------

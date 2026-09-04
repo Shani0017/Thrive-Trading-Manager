@@ -409,6 +409,15 @@ class TradeManagerApp:
             dec = decimals() if callable(decimals) else decimals
             entry.delete(0, tk.END)
             entry.insert(0, f"{val + step * sign * direction:.{dec}f}")
+            # Clicking the ▲/▼ button moves keyboard focus to the BUTTON,
+            # not the entry -- so a synthetic <KeyRelease> fired without
+            # first re-focusing the entry silently doesn't invoke whatever
+            # is bound to it (confirmed directly: Tk only dispatches a
+            # focus-less virtual key event to whichever widget currently
+            # holds focus). That meant every KeyRelease-driven live update
+            # (the breakeven SL preview, risk/reward) never refreshed when
+            # the stepper was used, only when actually typing.
+            entry.focus_set()
             entry.event_generate("<KeyRelease>")
 
         ctk.CTkButton(stepper, text="▲", width=18, height=15, font=ctk.CTkFont(size=8),
@@ -492,18 +501,29 @@ class TradeManagerApp:
                                              command=lambda: self._set_be_mode("pips"))
         self.be_pips_toggle.pack(side="left", expand=True, fill="x", padx=(1, 3), pady=3)
 
-        offset_line = ctk.CTkFrame(be_box, fg_color="transparent")
-        offset_line.pack(fill="x", padx=10, pady=(4, 0))
+        # The pips stepper/label/note only apply to "+ Pips" mode -- shown
+        # only once that tab is selected (self.be_mode starts "exact", so
+        # neither is packed yet). apply_row is built AFTER this so that
+        # re-showing offset_line later (pack_forget doesn't destroy it) can
+        # explicitly re-insert it "before=apply_row", keeping visual order
+        # correct regardless of how many times the mode's been toggled.
+        self.be_offset_line = ctk.CTkFrame(be_box, fg_color="transparent")
         self.pips_offset_frame, self.pips_offset_entry = self._make_number_field(
-            offset_line, width=44, step=1.0, decimals=1, default="5")
+            self.be_offset_line, width=44, step=1.0, decimals=1, default="5")
         self.pips_offset_frame.pack(side="left")
         self.pips_offset_entry.bind("<KeyRelease>", self._on_pips_entry_change)
-        ctk.CTkLabel(offset_line, text="pips", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
-            side="left", padx=(6, 6))
-        self.be_apply_btn = ctk.CTkButton(offset_line, text="Apply", height=24, width=50,
+        ctk.CTkLabel(self.be_offset_line, text="pips", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
+            side="left", padx=(6, 0))
+
+        self.be_pip_note_label = ctk.CTkLabel(
+            be_box, text="1 pip = $0.10 (10 cents)", font=ctk.CTkFont(size=8), text_color=MUTED)
+
+        self.be_apply_row = ctk.CTkFrame(be_box, fg_color="transparent")
+        self.be_apply_row.pack(fill="x", padx=10, pady=(6, 0))
+        self.be_apply_btn = ctk.CTkButton(self.be_apply_row, text="Apply", height=24,
                                            fg_color=ACCENT, hover_color=ACCENT_HOVER,
                                            command=self._on_breakeven_apply)
-        self.be_apply_btn.pack(side="left")
+        self.be_apply_btn.pack(fill="x")
 
         ctk.CTkLabel(be_box, text="New SL if applied:", font=ctk.CTkFont(size=9), text_color=MUTED).pack(
             anchor="w", padx=10, pady=(6, 0))
@@ -993,9 +1013,16 @@ class TradeManagerApp:
         if mode == "exact":
             self.be_exact_toggle.configure(fg_color=ACCENT, text_color=TEXT, hover_color=ACCENT_HOVER)
             self.be_pips_toggle.configure(fg_color="transparent", text_color=MUTED, hover_color=BORDER)
+            self.be_offset_line.pack_forget()
+            self.be_pip_note_label.pack_forget()
         else:
             self.be_pips_toggle.configure(fg_color=ACCENT, text_color=TEXT, hover_color=ACCENT_HOVER)
             self.be_exact_toggle.configure(fg_color="transparent", text_color=MUTED, hover_color=BORDER)
+            # before=self.be_apply_row keeps these anchored above Apply
+            # regardless of how many times pack_forget/pack has toggled
+            # them -- a plain .pack() would just re-append at the end.
+            self.be_offset_line.pack(fill="x", padx=10, pady=(4, 0), before=self.be_apply_row)
+            self.be_pip_note_label.pack(anchor="w", padx=10, pady=(2, 0), before=self.be_apply_row)
         self._on_pips_entry_change(None)
 
     def _on_pips_entry_change(self, event):

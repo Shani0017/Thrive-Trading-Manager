@@ -7,8 +7,6 @@ from gui import BG, CARD, CARD_ALT, BORDER, TEXT, MUTED, ACCENT, ACCENT_HOVER, G
 from trade_records import build_trade_records
 from trade_sources import load_sources, save_sources
 
-QUICK_SOURCES = ["My Analysis", "XYZ Trader", "XYZ YouTube", "Thrive"]
-
 
 class TradeJournalApp:
     """Full trade history: fetched from MT5's own closed-deal history (real
@@ -228,7 +226,11 @@ class TradeJournalApp:
         x, y, width, height = bbox
         current = self.sources.get(position_id, "")
 
-        editor = ttk.Combobox(self.tree, values=QUICK_SOURCES, font=("Segoe UI", 9))
+        # Plain text entry, not a dropdown -- the source is free-form (any
+        # trader/video/analysis name the user wants), and a Combobox implies
+        # picking from a fixed list rather than typing whatever they like.
+        editor = tk.Entry(self.tree, font=("Segoe UI", 9), bg=CARD, fg=TEXT,
+                           insertbackground=TEXT, relief="flat")
         editor.insert(0, current)
         editor.select_range(0, tk.END)
         editor.place(x=x, y=y, width=width, height=height)
@@ -243,7 +245,6 @@ class TradeJournalApp:
             self._close_source_editor()
 
         editor.bind("<Return>", commit)
-        editor.bind("<<ComboboxSelected>>", commit)
         editor.bind("<Escape>", cancel)
         editor.bind("<FocusOut>", commit)
 

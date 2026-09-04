@@ -21,8 +21,8 @@ class TradeJournalApp:
         self.mt5 = mt5
         self.on_home = on_home
         self.root.title("Trading Journal")
-        self.root.geometry("1320x900")
-        self.root.minsize(1080, 700)
+        self.root.geometry("1120x760")
+        self.root.minsize(960, 600)
         self.root.configure(fg_color=BG)
 
         self.date_range_days = 30
@@ -47,18 +47,18 @@ class TradeJournalApp:
 
     def _build_header(self, root):
         bar = ctk.CTkFrame(root, fg_color="transparent")
-        bar.pack(fill="x", padx=20, pady=(20, 12))
-        ctk.CTkButton(bar, text="← Home", width=84, height=30, font=ctk.CTkFont(size=11),
+        bar.pack(fill="x", padx=16, pady=(12, 8))
+        ctk.CTkButton(bar, text="← Home", width=72, height=24, font=ctk.CTkFont(size=10),
                       fg_color=CARD_ALT, hover_color=BORDER, text_color=TEXT,
                       command=self.on_home).pack(side="left")
-        ctk.CTkLabel(bar, text="Trading Journal", font=ctk.CTkFont(size=18, weight="bold"),
-                     text_color=TEXT).pack(side="left", padx=(16, 0))
+        ctk.CTkLabel(bar, text="Trading Journal", font=ctk.CTkFont(size=15, weight="bold"),
+                     text_color=TEXT).pack(side="left", padx=(12, 0))
 
     def _build_summary(self, root):
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="x", padx=20, pady=(0, 12))
+        card.pack(fill="x", padx=16, pady=(0, 8))
         row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=18, pady=16)
+        row.pack(fill="x", padx=14, pady=8)
 
         self.total_pnl_value = self._summary_cell(row, "Total P&L")
         self.win_rate_value = self._summary_cell(row, "Win Rate")
@@ -68,21 +68,21 @@ class TradeJournalApp:
         cell = ctk.CTkFrame(parent, fg_color="transparent")
         cell.pack(side="left", expand=True, fill="x")
         ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=11), text_color=MUTED).pack(anchor="w")
-        value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=18, weight="bold"), text_color=TEXT)
-        value.pack(anchor="w", pady=(2, 0))
+        value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT)
+        value.pack(anchor="w", pady=(1, 0))
         return value
 
     def _build_filters(self, root):
         bar = ctk.CTkFrame(root, fg_color=CARD, corner_radius=12, border_width=1, border_color=BORDER)
-        bar.pack(fill="x", padx=20, pady=(0, 12))
+        bar.pack(fill="x", padx=16, pady=(0, 8))
         inner = ctk.CTkFrame(bar, fg_color="transparent")
-        inner.pack(fill="x", padx=16, pady=12)
+        inner.pack(fill="x", padx=12, pady=8)
 
         ctk.CTkLabel(inner, text="Period", font=ctk.CTkFont(size=11), text_color=MUTED).pack(
             side="left", padx=(0, 8))
         self._period_buttons = {}
         for label, days in (("7D", 7), ("30D", 30), ("90D", 90), ("All", None)):
-            btn = ctk.CTkButton(inner, text=label, width=54, height=28, font=ctk.CTkFont(size=11),
+            btn = ctk.CTkButton(inner, text=label, width=46, height=24, font=ctk.CTkFont(size=10),
                                  command=lambda d=days: self._set_period(d))
             btn.pack(side="left", padx=4)
             self._period_buttons[days] = btn
@@ -91,12 +91,12 @@ class TradeJournalApp:
         ctk.CTkLabel(inner, text="Symbol", font=ctk.CTkFont(size=11), text_color=MUTED).pack(
             side="left", padx=(24, 8))
         self.symbol_menu = ctk.CTkOptionMenu(
-            inner, values=["All"], width=130, fg_color=CARD_ALT, button_color=CARD_ALT,
+            inner, values=["All"], width=110, height=24, fg_color=CARD_ALT, button_color=CARD_ALT,
             button_hover_color=BORDER, dropdown_fg_color=CARD_ALT, text_color=TEXT,
             command=self._on_symbol_filter_change)
         self.symbol_menu.pack(side="left")
 
-        ctk.CTkButton(inner, text="Refresh", width=84, height=28, fg_color=ACCENT,
+        ctk.CTkButton(inner, text="Refresh", width=72, height=24, fg_color=ACCENT,
                       hover_color=ACCENT_HOVER, command=self._load_and_refresh).pack(side="right")
 
     def _refresh_period_buttons(self):
@@ -117,15 +117,15 @@ class TradeJournalApp:
 
     def _build_table(self, root):
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="both", expand=True, padx=20, pady=(0, 12))
+        card.pack(fill="both", expand=True, padx=16, pady=(0, 8))
 
         ctk.CTkLabel(card, text="CLOSED TRADES", font=ctk.CTkFont(size=10, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", padx=18, pady=(14, 8))
+                     text_color=MUTED).pack(anchor="w", padx=14, pady=(8, 4))
 
         style = ttk.Style()
         style.theme_use("clam")
         style.configure("Journal.Treeview", background=CARD, fieldbackground=CARD, foreground=TEXT,
-                         rowheight=28, font=("Segoe UI", 10), borderwidth=0)
+                         rowheight=22, font=("Segoe UI", 9), borderwidth=0)
         style.configure("Journal.Treeview.Heading", background=CARD_ALT, foreground=MUTED,
                          font=("Segoe UI", 9, "bold"), borderwidth=0, relief="flat")
         style.map("Journal.Treeview.Heading", background=[("active", BORDER)])
@@ -136,19 +136,19 @@ class TradeJournalApp:
                     "entry": "Entry", "exit": "Exit", "pnl": "P&L", "source": "Source"}
         self._column_weights = {"date": 0.15, "symbol": 0.11, "direction": 0.08, "volume": 0.08,
                                  "entry": 0.12, "exit": 0.12, "pnl": 0.11, "source": 0.23}
-        self.tree = ttk.Treeview(card, columns=columns, show="headings", height=12,
+        self.tree = ttk.Treeview(card, columns=columns, show="headings", height=8,
                                   style="Journal.Treeview")
         for col in columns:
             self.tree.heading(col, text=headings[col])
             self.tree.column(col, anchor="center", stretch=False, width=80)
         self.tree.tag_configure("win", foreground=GREEN)
         self.tree.tag_configure("loss", foreground=RED)
-        self.tree.pack(fill="both", expand=True, padx=18, pady=(0, 8))
+        self.tree.pack(fill="both", expand=True, padx=14, pady=(0, 6))
         self.tree.bind("<<TreeviewSelect>>", self._on_select_trade)
         self.tree.bind("<Configure>", self._on_tree_resize)
 
         self.table_hint_label = ctk.CTkLabel(card, text="", font=ctk.CTkFont(size=11), text_color=MUTED)
-        self.table_hint_label.pack(anchor="w", padx=18, pady=(0, 16))
+        self.table_hint_label.pack(anchor="w", padx=14, pady=(0, 8))
 
     def _on_tree_resize(self, event):
         total_width = event.width
@@ -159,28 +159,28 @@ class TradeJournalApp:
 
     def _build_source_editor(self, root):
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="x", padx=20, pady=(0, 20))
+        card.pack(fill="x", padx=16, pady=(0, 12))
         ctk.CTkLabel(card, text="TRADE SOURCE", font=ctk.CTkFont(size=10, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", padx=18, pady=(14, 8))
+                     text_color=MUTED).pack(anchor="w", padx=14, pady=(8, 4))
         ctk.CTkLabel(card, text="Where did this trade idea come from? Select a closed trade above, "
                                  "then type or pick a source.",
                      font=ctk.CTkFont(size=10), text_color=MUTED, wraplength=900,
-                     justify="left").pack(anchor="w", padx=18, pady=(0, 10))
+                     justify="left").pack(anchor="w", padx=14, pady=(0, 6))
 
         row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=18)
-        self.source_entry = ctk.CTkEntry(row, width=240, placeholder_text="e.g. My Analysis, XYZ Trader...")
+        row.pack(fill="x", padx=14)
+        self.source_entry = ctk.CTkEntry(row, width=220, height=26, placeholder_text="e.g. My Analysis, XYZ Trader...")
         self.source_entry.pack(side="left")
-        self.save_source_btn = ctk.CTkButton(row, text="Save", width=70, fg_color=ACCENT,
+        self.save_source_btn = ctk.CTkButton(row, text="Save", width=60, height=26, fg_color=ACCENT,
                                               hover_color=ACCENT_HOVER, command=self._save_source,
                                               state="disabled")
         self.save_source_btn.pack(side="left", padx=(8, 0))
 
         quick_row = ctk.CTkFrame(card, fg_color="transparent")
-        quick_row.pack(fill="x", padx=18, pady=(10, 6))
+        quick_row.pack(fill="x", padx=14, pady=(6, 4))
         self._quick_source_buttons = []
         for label in QUICK_SOURCES:
-            btn = ctk.CTkButton(quick_row, text=label, height=26, font=ctk.CTkFont(size=10),
+            btn = ctk.CTkButton(quick_row, text=label, height=22, font=ctk.CTkFont(size=9),
                                  fg_color=CARD_ALT, hover_color=BORDER, text_color=TEXT,
                                  state="disabled", command=lambda l=label: self._quick_set_source(l))
             btn.pack(side="left", padx=(0, 6))
@@ -188,7 +188,7 @@ class TradeJournalApp:
 
         self.source_hint_label = ctk.CTkLabel(card, text="Select a trade above to tag its source.",
                                                font=ctk.CTkFont(size=10), text_color=MUTED)
-        self.source_hint_label.pack(anchor="w", padx=18, pady=(4, 14))
+        self.source_hint_label.pack(anchor="w", padx=14, pady=(4, 8))
 
     # ------------------------------------------------------------------
 

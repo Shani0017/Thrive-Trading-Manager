@@ -68,8 +68,8 @@ class TradeManagerApp:
         self.mt5 = mt5
         self.on_home = on_home
         self.root.title("MT5 Trade Manager")
-        self.root.geometry("1320x900")
-        self.root.minsize(1120, 700)
+        self.root.geometry("1180x800")
+        self.root.minsize(1000, 620)
         self.root.configure(fg_color=BG)
         self.connected = False
         self.selected_ticket = None
@@ -109,7 +109,7 @@ class TradeManagerApp:
         self._build_positions_panel(content)
 
         chart_overview_row = ctk.CTkFrame(content, fg_color="transparent")
-        chart_overview_row.pack(fill="x", padx=20, pady=(0, 12))
+        chart_overview_row.pack(fill="x", padx=16, pady=(0, 8))
 
         chart_col = ctk.CTkFrame(chart_overview_row, fg_color="transparent")
         chart_col.pack(side="left", fill="both", expand=True, padx=(0, 8))
@@ -135,16 +135,16 @@ class TradeManagerApp:
 
     def _build_topbar(self, root):
         bar = ctk.CTkFrame(root, fg_color="transparent")
-        bar.pack(fill="x", padx=20, pady=(20, 12))
+        bar.pack(fill="x", padx=16, pady=(12, 8))
 
         if self.on_home:
-            ctk.CTkButton(bar, text="← Home", width=84, height=30, font=ctk.CTkFont(size=11),
+            ctk.CTkButton(bar, text="← Home", width=72, height=24, font=ctk.CTkFont(size=10),
                           fg_color=CARD_ALT, hover_color=BORDER, text_color=TEXT,
                           command=self._go_home).pack(side="left", padx=(0, 16))
 
         try:
             logo_img = Image.open(_resource_path("assets/logo.png"))
-            self._logo_image = ctk.CTkImage(logo_img, size=(126, 46))
+            self._logo_image = ctk.CTkImage(logo_img, size=(100, 36))
             ctk.CTkLabel(bar, image=self._logo_image, text="").pack(side="left", padx=(0, 20))
         except Exception:
             ctk.CTkLabel(bar, text="THRIVE", text_color=TEXT,
@@ -154,7 +154,7 @@ class TradeManagerApp:
         self.status_badge.pack(side="left", padx=(0, 16))
         self.status_label = ctk.CTkLabel(self.status_badge, text="● Connecting...",
                                           font=ctk.CTkFont(size=12, weight="bold"), text_color=AMBER)
-        self.status_label.pack(padx=14, pady=6)
+        self.status_label.pack(padx=10, pady=4)
 
         # Account / Open Positions / Active Symbol chips anchored to the top
         # RIGHT of the bar (logo + connection status stay on the left).
@@ -168,30 +168,30 @@ class TradeManagerApp:
         self.active_symbol_chip.pack(side="right")
         self.active_symbol_value = ctk.CTkLabel(self.active_symbol_chip, text="—",
                                                   font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT)
-        self.active_symbol_value.pack(padx=16, pady=(6, 0))
+        self.active_symbol_value.pack(padx=12, pady=(4, 0))
         ctk.CTkLabel(self.active_symbol_chip, text="Active Symbol", font=ctk.CTkFont(size=9),
-                     text_color=MUTED).pack(padx=16, pady=(0, 6))
+                     text_color=MUTED).pack(padx=12, pady=(0, 4))
 
         self.position_count_chip = ctk.CTkFrame(bar, corner_radius=10, fg_color=CARD, border_width=1,
                                                   border_color=BORDER)
         self.position_count_chip.pack(side="right", padx=(0, 12))
         self.position_count_value = ctk.CTkLabel(self.position_count_chip, text="0",
                                                    font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT)
-        self.position_count_value.pack(padx=16, pady=(6, 0))
+        self.position_count_value.pack(padx=12, pady=(4, 0))
         ctk.CTkLabel(self.position_count_chip, text="Open Positions", font=ctk.CTkFont(size=9),
-                     text_color=MUTED).pack(padx=16, pady=(0, 6))
+                     text_color=MUTED).pack(padx=12, pady=(0, 4))
 
         account_chip = ctk.CTkFrame(bar, corner_radius=10, fg_color=CARD, border_width=1,
                                      border_color=BORDER)
         account_chip.pack(side="right", padx=(0, 12))
         inner = ctk.CTkFrame(account_chip, fg_color="transparent")
-        inner.pack(padx=12, pady=6)
+        inner.pack(padx=10, pady=4)
         ctk.CTkLabel(inner, text="Account", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
             side="left", padx=(0, 8))
         self.account_number_label = ctk.CTkLabel(inner, text="—", font=ctk.CTkFont(size=12, weight="bold"),
                                                    text_color=TEXT)
         self.account_number_label.pack(side="left", padx=(0, 6))
-        ctk.CTkButton(inner, text="Copy", width=44, height=22, font=ctk.CTkFont(size=10),
+        ctk.CTkButton(inner, text="Copy", width=40, height=20, font=ctk.CTkFont(size=9),
                       fg_color=CARD_ALT, hover_color=BORDER, text_color=MUTED,
                       command=self._copy_account_number).pack(side="left")
 
@@ -210,10 +210,10 @@ class TradeManagerApp:
         card.pack(fill="both", expand=True)
 
         ctk.CTkLabel(card, text="ACCOUNT OVERVIEW", font=ctk.CTkFont(size=10, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", padx=18, pady=(14, 8))
+                     text_color=MUTED).pack(anchor="w", padx=14, pady=(8, 4))
 
         row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(fill="x", padx=18, pady=(0, 16))
+        row.pack(fill="x", padx=14, pady=(0, 8))
 
         self.balance_value = self._stat_cell(row, "Balance")
         self.equity_value = self._stat_cell(row, "Equity")
@@ -227,10 +227,10 @@ class TradeManagerApp:
         # a horizontal row of 5 cells left most of the card's height empty
         # below it. Stacking fills that space usefully instead.
         cell = ctk.CTkFrame(parent, fg_color="transparent")
-        cell.pack(fill="x", pady=(0, 10))
+        cell.pack(fill="x", pady=(0, 5))
         ctk.CTkLabel(cell, text=label, font=ctk.CTkFont(size=10), text_color=MUTED).pack(anchor="w")
-        value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=16, weight="bold"), text_color=TEXT)
-        value.pack(anchor="w", pady=(2, 0))
+        value = ctk.CTkLabel(cell, text="—", font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT)
+        value.pack(anchor="w", pady=(1, 0))
         if with_pct:
             pct = ctk.CTkLabel(cell, text="", font=ctk.CTkFont(size=11), text_color=MUTED)
             pct.pack(anchor="w")
@@ -245,11 +245,11 @@ class TradeManagerApp:
         # leftover scroll space, turning a short table into a mostly-empty
         # box (the exact bug already fixed once before in this file).
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="x", anchor="n", padx=20, pady=(0, 12))
+        card.pack(fill="x", anchor="n", padx=16, pady=(0, 8))
 
         self.positions_title = ctk.CTkLabel(card, text="OPEN POSITIONS (0)",
                                              font=ctk.CTkFont(size=11, weight="bold"), text_color=MUTED)
-        self.positions_title.pack(anchor="w", padx=18, pady=(16, 8))
+        self.positions_title.pack(anchor="w", padx=14, pady=(8, 4))
 
         self._setup_treeview_style()
 
@@ -271,18 +271,18 @@ class TradeManagerApp:
             "symbol": 0.14, "direction": 0.10, "volume": 0.08, "entry": 0.14,
             "current": 0.14, "pnl": 0.12, "pips": 0.08, "sl": 0.10, "tp": 0.10,
         }
-        self.tree = ttk.Treeview(card, columns=columns, show="headings", height=6,
+        self.tree = ttk.Treeview(card, columns=columns, show="headings", height=5,
                                   style="Positions.Treeview")
         for col in columns:
             self.tree.heading(col, text=headings[col])
             self.tree.column(col, anchor="center", stretch=False, width=60)
-        self.tree.pack(fill="both", expand=True, padx=18, pady=(0, 8))
+        self.tree.pack(fill="both", expand=True, padx=14, pady=(0, 6))
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
         self.tree.bind("<Configure>", self._on_tree_resize)
 
         self.table_summary_label = ctk.CTkLabel(card, text="0 position(s)  •  Total P/L: $0.00",
                                                   font=ctk.CTkFont(size=11), text_color=MUTED)
-        self.table_summary_label.pack(anchor="w", padx=18, pady=(0, 16))
+        self.table_summary_label.pack(anchor="w", padx=14, pady=(0, 8))
 
     def _on_tree_resize(self, event):
         total_width = event.width
@@ -299,7 +299,7 @@ class TradeManagerApp:
         style = ttk.Style()
         style.theme_use("clam")
         style.configure("Positions.Treeview", background=CARD, fieldbackground=CARD,
-                         foreground=TEXT, rowheight=30, font=("Segoe UI", 10), borderwidth=0)
+                         foreground=TEXT, rowheight=22, font=("Segoe UI", 9), borderwidth=0)
         style.configure("Positions.Treeview.Heading", background=CARD_ALT, foreground=MUTED,
                          font=("Segoe UI", 9, "bold"), borderwidth=0, relief="flat")
         style.map("Positions.Treeview.Heading", background=[("active", BORDER)])
@@ -310,7 +310,7 @@ class TradeManagerApp:
         """A numeric entry with small +/- steppers, matching the reference
         mockup's spinner inputs. Returns (frame, entry)."""
         frame = ctk.CTkFrame(parent, fg_color="transparent")
-        entry = ctk.CTkEntry(frame, width=width, height=32, border_color=BORDER,
+        entry = ctk.CTkEntry(frame, width=width, height=26, border_color=BORDER,
                               fg_color=CARD, text_color=TEXT)
         if default:
             entry.insert(0, default)
@@ -344,10 +344,10 @@ class TradeManagerApp:
         sections out side-by-side across the full window width gives each
         one enough room."""
         card = ctk.CTkFrame(root, corner_radius=14, fg_color=CARD, border_width=1, border_color=BORDER)
-        card.pack(fill="x", padx=20, pady=(0, 12))
+        card.pack(fill="x", padx=16, pady=(0, 8))
 
         header = ctk.CTkFrame(card, fg_color="transparent")
-        header.pack(fill="x", padx=18, pady=(16, 8))
+        header.pack(fill="x", padx=14, pady=(8, 4))
         self.detail_symbol_label = ctk.CTkLabel(header, text="No position selected",
                                                  font=ctk.CTkFont(size=17, weight="bold"), text_color=TEXT)
         self.detail_symbol_label.pack(side="left")
@@ -367,16 +367,16 @@ class TradeManagerApp:
         self.detail_pl_pips_label.pack(side="right", padx=(0, 8))
 
         price_row = ctk.CTkFrame(card, fg_color=CARD_ALT, corner_radius=10)
-        price_row.pack(fill="x", padx=18, pady=(4, 14))
+        price_row.pack(fill="x", padx=14, pady=(4, 8))
         entry_cell = ctk.CTkFrame(price_row, fg_color="transparent")
-        entry_cell.pack(side="left", padx=14, pady=10)
+        entry_cell.pack(side="left", padx=10, pady=6)
         ctk.CTkLabel(entry_cell, text="Entry Price", font=ctk.CTkFont(size=10), text_color=MUTED).pack(anchor="w")
         self.detail_entry_price_label = ctk.CTkLabel(entry_cell, text="—",
                                                        font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT)
         self.detail_entry_price_label.pack(anchor="w")
         ctk.CTkLabel(price_row, text="→", font=ctk.CTkFont(size=14), text_color=MUTED).pack(side="left")
         current_cell = ctk.CTkFrame(price_row, fg_color="transparent")
-        current_cell.pack(side="left", padx=14, pady=10)
+        current_cell.pack(side="left", padx=10, pady=6)
         ctk.CTkLabel(current_cell, text="Current Price", font=ctk.CTkFont(size=10), text_color=MUTED).pack(anchor="w")
         self.detail_current_price_label = ctk.CTkLabel(current_cell, text="—",
                                                          font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT)
@@ -391,102 +391,102 @@ class TradeManagerApp:
 
         # --- Breakeven | Stop Loss | Take Profit | Close Position, side by side ---
         actions_row = ctk.CTkFrame(card, fg_color="transparent")
-        actions_row.pack(fill="x", padx=18, pady=(0, 18))
+        actions_row.pack(fill="x", padx=14, pady=(0, 10))
 
         be_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         be_box.pack(side="left", fill="both", expand=True, padx=(0, 8))
         ctk.CTkLabel(be_box, text="BREAKEVEN", font=ctk.CTkFont(size=10, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", padx=12, pady=(10, 6))
+                     text_color=MUTED).pack(anchor="w", padx=10, pady=(6, 4))
         toggle_row = ctk.CTkFrame(be_box, fg_color=CARD, corner_radius=8)
         toggle_row.pack(fill="x", padx=12)
-        self.be_exact_toggle = ctk.CTkButton(toggle_row, text="Exact", height=28,
+        self.be_exact_toggle = ctk.CTkButton(toggle_row, text="Exact", height=24,
                                               fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color=TEXT,
                                               command=lambda: self._set_be_mode("exact"))
         self.be_exact_toggle.pack(side="left", expand=True, fill="x", padx=(3, 1), pady=3)
-        self.be_pips_toggle = ctk.CTkButton(toggle_row, text="+ Pips", height=28,
+        self.be_pips_toggle = ctk.CTkButton(toggle_row, text="+ Pips", height=24,
                                              fg_color="transparent", hover_color=BORDER, text_color=MUTED,
                                              command=lambda: self._set_be_mode("pips"))
         self.be_pips_toggle.pack(side="left", expand=True, fill="x", padx=(1, 3), pady=3)
 
         offset_line = ctk.CTkFrame(be_box, fg_color="transparent")
-        offset_line.pack(fill="x", padx=12, pady=(8, 0))
+        offset_line.pack(fill="x", padx=10, pady=(4, 0))
         self.pips_offset_frame, self.pips_offset_entry = self._make_number_field(
             offset_line, width=44, step=1.0, decimals=1, default="5")
         self.pips_offset_frame.pack(side="left")
         self.pips_offset_entry.bind("<KeyRelease>", self._on_pips_entry_change)
         ctk.CTkLabel(offset_line, text="pips", font=ctk.CTkFont(size=10), text_color=MUTED).pack(
             side="left", padx=(6, 6))
-        self.be_apply_btn = ctk.CTkButton(offset_line, text="Apply", height=28, width=56,
+        self.be_apply_btn = ctk.CTkButton(offset_line, text="Apply", height=24, width=50,
                                            fg_color=ACCENT, hover_color=ACCENT_HOVER,
                                            command=self._on_breakeven_apply)
         self.be_apply_btn.pack(side="left")
 
         ctk.CTkLabel(be_box, text="New SL if applied:", font=ctk.CTkFont(size=9), text_color=MUTED).pack(
-            anchor="w", padx=12, pady=(10, 0))
+            anchor="w", padx=10, pady=(6, 0))
         self.be_preview_value = ctk.CTkLabel(be_box, text="—", font=ctk.CTkFont(size=12, weight="bold"),
                                               text_color=GREEN)
-        self.be_preview_value.pack(anchor="w", padx=12, pady=(0, 10))
+        self.be_preview_value.pack(anchor="w", padx=10, pady=(0, 6))
 
         sl_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         sl_box.pack(side="left", fill="both", expand=True, padx=8)
         ctk.CTkLabel(sl_box, text="STOP LOSS", font=ctk.CTkFont(size=10, weight="bold"),
-                     text_color=RED).pack(anchor="w", padx=12, pady=(10, 6))
+                     text_color=RED).pack(anchor="w", padx=10, pady=(6, 4))
         sl_line = ctk.CTkFrame(sl_box, fg_color="transparent")
-        sl_line.pack(fill="x", padx=12)
+        sl_line.pack(fill="x", padx=10)
         self.sl_field_frame, self.sl_entry = self._make_number_field(sl_line, width=64, step=0.1, decimals=5)
         self.sl_field_frame.pack(side="left")
         self.sl_entry.bind("<KeyRelease>", self._update_risk_reward)
-        self.set_sl_btn = ctk.CTkButton(sl_line, text="Set", width=48, height=28,
+        self.set_sl_btn = ctk.CTkButton(sl_line, text="Set", width=42, height=24,
                                          fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._on_set_sl)
         self.set_sl_btn.pack(side="left", padx=(6, 0))
         ctk.CTkLabel(sl_box, text="Current:", font=ctk.CTkFont(size=9), text_color=MUTED).pack(
-            anchor="w", padx=12, pady=(10, 0))
+            anchor="w", padx=10, pady=(6, 0))
         self.current_sl_label = ctk.CTkLabel(sl_box, text="—", font=ctk.CTkFont(size=11), text_color=TEXT)
-        self.current_sl_label.pack(anchor="w", padx=12, pady=(0, 10))
+        self.current_sl_label.pack(anchor="w", padx=10, pady=(0, 6))
 
         tp_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         tp_box.pack(side="left", fill="both", expand=True, padx=8)
         ctk.CTkLabel(tp_box, text="TAKE PROFIT", font=ctk.CTkFont(size=10, weight="bold"),
-                     text_color=GREEN).pack(anchor="w", padx=12, pady=(10, 6))
+                     text_color=GREEN).pack(anchor="w", padx=10, pady=(6, 4))
         tp_line = ctk.CTkFrame(tp_box, fg_color="transparent")
-        tp_line.pack(fill="x", padx=12)
+        tp_line.pack(fill="x", padx=10)
         self.tp_field_frame, self.tp_entry = self._make_number_field(tp_line, width=64, step=0.1, decimals=5)
         self.tp_field_frame.pack(side="left")
         self.tp_entry.bind("<KeyRelease>", self._update_risk_reward)
-        self.set_tp_btn = ctk.CTkButton(tp_line, text="Set", width=48, height=28,
+        self.set_tp_btn = ctk.CTkButton(tp_line, text="Set", width=42, height=24,
                                          fg_color=ACCENT, hover_color=ACCENT_HOVER, command=self._on_set_tp)
         self.set_tp_btn.pack(side="left", padx=(6, 0))
         ctk.CTkLabel(tp_box, text="Current:", font=ctk.CTkFont(size=9), text_color=MUTED).pack(
-            anchor="w", padx=12, pady=(10, 0))
+            anchor="w", padx=10, pady=(6, 0))
         self.current_tp_label = ctk.CTkLabel(tp_box, text="—", font=ctk.CTkFont(size=11), text_color=TEXT)
-        self.current_tp_label.pack(anchor="w", padx=12, pady=(0, 10))
+        self.current_tp_label.pack(anchor="w", padx=10, pady=(0, 6))
 
         close_box = ctk.CTkFrame(actions_row, fg_color=CARD_ALT, corner_radius=10)
         close_box.pack(side="left", fill="both", expand=True, padx=(8, 0))
         ctk.CTkLabel(close_box, text="CLOSE POSITION", font=ctk.CTkFont(size=10, weight="bold"),
-                     text_color=MUTED).pack(anchor="w", padx=12, pady=(10, 6))
-        self.half_close_btn = ctk.CTkButton(close_box, text="Half Close (50%)", height=30,
+                     text_color=MUTED).pack(anchor="w", padx=10, pady=(6, 4))
+        self.half_close_btn = ctk.CTkButton(close_box, text="Half Close (50%)", height=24,
                                              fg_color=CARD, hover_color=BORDER, text_color=TEXT,
                                              border_width=1, border_color=BORDER,
                                              command=self._on_half_close)
-        self.half_close_btn.pack(fill="x", padx=12, pady=(0, 6))
-        self.full_close_btn = ctk.CTkButton(close_box, text="Full Close", height=30,
+        self.half_close_btn.pack(fill="x", padx=10, pady=(0, 4))
+        self.full_close_btn = ctk.CTkButton(close_box, text="Full Close", height=24,
                                              fg_color=RED, hover_color="#dc2626",
                                              command=self._on_full_close)
-        self.full_close_btn.pack(fill="x", padx=12, pady=(0, 8))
+        self.full_close_btn.pack(fill="x", padx=10, pady=(0, 5))
         self.skip_confirm_var = tk.BooleanVar(value=False)
         self.skip_confirm_check = ctk.CTkCheckBox(
             close_box, text="Don't ask again",
             variable=self.skip_confirm_var, font=ctk.CTkFont(size=10), text_color=MUTED,
             fg_color=ACCENT, hover_color=ACCENT_HOVER, border_color=BORDER,
             checkbox_width=14, checkbox_height=14)
-        self.skip_confirm_check.pack(anchor="w", padx=12, pady=(0, 10))
+        self.skip_confirm_check.pack(anchor="w", padx=10, pady=(0, 6))
 
         self.detail_result_banner = ctk.CTkFrame(card, corner_radius=8, fg_color=CARD)
-        self.detail_result_banner.pack(fill="x", padx=18, pady=(0, 16))
+        self.detail_result_banner.pack(fill="x", padx=14, pady=(0, 8))
         self.detail_result_label = ctk.CTkLabel(self.detail_result_banner, text="",
                                                   font=ctk.CTkFont(size=11, weight="bold"), anchor="w")
-        self.detail_result_label.pack(anchor="w", padx=12, pady=6)
+        self.detail_result_label.pack(anchor="w", padx=10, pady=4)
 
         self.action_widgets = [
             self.be_exact_toggle, self.be_pips_toggle, self.pips_offset_entry, self.be_apply_btn,
@@ -501,7 +501,7 @@ class TradeManagerApp:
         card.pack(fill="both", expand=True)
 
         header_row = ctk.CTkFrame(card, fg_color="transparent")
-        header_row.pack(fill="x", padx=18, pady=(14, 6))
+        header_row.pack(fill="x", padx=14, pady=(8, 4))
         self.chart_title_label = ctk.CTkLabel(header_row, text="LIVE CHART", font=ctk.CTkFont(size=10, weight="bold"),
                                                text_color=MUTED)
         self.chart_title_label.pack(side="left")
@@ -511,13 +511,13 @@ class TradeManagerApp:
         tf_row = ctk.CTkFrame(header_row, fg_color=CARD_ALT, corner_radius=8)
         tf_row.pack(side="right")
         for label, tf in (("1m", "M1"), ("5m", "M5"), ("15m", "M15")):
-            btn = ctk.CTkButton(tf_row, text=label, width=44, height=24, font=ctk.CTkFont(size=10),
+            btn = ctk.CTkButton(tf_row, text=label, width=36, height=20, font=ctk.CTkFont(size=9),
                                  command=lambda tf=tf: self._set_chart_timeframe(tf))
             btn.pack(side="left", padx=2, pady=2)
             self._timeframe_buttons[tf] = btn
         self._refresh_timeframe_buttons()
 
-        fig = Figure(figsize=(10, 2.6), dpi=100, facecolor=CARD)
+        fig = Figure(figsize=(10, 1.9), dpi=100, facecolor=CARD)
         self.chart_ax = fig.add_subplot(111)
         self._style_chart_axes()
         self.chart_ax.text(0.5, 0.5, "Select a position to view its chart", color=MUTED,
@@ -526,7 +526,7 @@ class TradeManagerApp:
 
         self.chart_canvas = FigureCanvasTkAgg(fig, master=card)
         self.chart_canvas.get_tk_widget().configure(bg=CARD, highlightthickness=0)
-        self.chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=18, pady=(0, 18))
+        self.chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=14, pady=(0, 10))
         self.chart_canvas.draw()
 
     def _refresh_timeframe_buttons(self):
@@ -557,7 +557,7 @@ class TradeManagerApp:
 
     def _build_footer(self, root):
         bar = ctk.CTkFrame(root, fg_color="transparent")
-        bar.pack(fill="x", padx=20, pady=(0, 16))
+        bar.pack(fill="x", padx=16, pady=(0, 8))
         self.footer_time_label = ctk.CTkLabel(bar, text="Last Update: —", font=ctk.CTkFont(size=10),
                                                text_color=MUTED)
         self.footer_time_label.pack(side="left")

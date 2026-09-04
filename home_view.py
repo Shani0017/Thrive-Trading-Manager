@@ -15,16 +15,16 @@ class HomeScreen:
     rescaled on every window resize, proportional to how much bigger/smaller
     the window is than its starting size."""
 
-    BASE_WIDTH = 900
-    BASE_HEIGHT = 600
-    BASE_LOGO_SIZE = (180, 66)
-    BASE_CARD_SIZE = (280, 200)
+    BASE_WIDTH = 760
+    BASE_HEIGHT = 480
+    BASE_LOGO_SIZE = (140, 51)
+    BASE_CARD_SIZE = (230, 165)
 
     def __init__(self, root, on_open_manager, on_open_journal):
         self.root = root
         self.root.title("MT5 Trade Manager")
         self.root.geometry(f"{self.BASE_WIDTH}x{self.BASE_HEIGHT}")
-        self.root.minsize(760, 520)
+        self.root.minsize(640, 440)
         self.root.configure(fg_color=BG)
 
         self._resize_job = None
@@ -48,11 +48,11 @@ class HomeScreen:
         else:
             self.logo_label = ctk.CTkLabel(self.center, text="THRIVE", text_color=TEXT,
                                             font=ctk.CTkFont(size=28, weight="bold"))
-        self.logo_label.pack(pady=(0, 30))
+        self.logo_label.pack(pady=(0, 20))
 
         self.subtitle_label = ctk.CTkLabel(self.center, text="What would you like to open?",
-                                            font=ctk.CTkFont(size=14), text_color=MUTED)
-        self.subtitle_label.pack(pady=(0, 24))
+                                            font=ctk.CTkFont(size=12), text_color=MUTED)
+        self.subtitle_label.pack(pady=(0, 16))
 
         cards_row = ctk.CTkFrame(self.center, fg_color="transparent")
         cards_row.pack()
@@ -61,13 +61,13 @@ class HomeScreen:
             cards_row, "Trade Manager",
             "Manage open positions: breakeven, close, SL/TP, live chart.",
             on_open_manager)
-        self.card1.pack(side="left", padx=12)
+        self.card1.pack(side="left", padx=8)
 
         self.card2, self.card2_widgets = self._make_choice_card(
             cards_row, "Trading Journal",
             "Full trade history, P&L, filters, and notes on where each trade came from.",
             on_open_journal)
-        self.card2.pack(side="left", padx=12)
+        self.card2.pack(side="left", padx=8)
 
         self.root.bind("<Configure>", self._on_root_resize)
 
@@ -76,15 +76,15 @@ class HomeScreen:
                              border_color=BORDER, width=self.BASE_CARD_SIZE[0],
                              height=self.BASE_CARD_SIZE[1])
         card.pack_propagate(False)
-        title_label = ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=17, weight="bold"),
+        title_label = ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=14, weight="bold"),
                                     text_color=TEXT)
-        title_label.pack(anchor="w", padx=22, pady=(24, 8))
-        subtitle_label = ctk.CTkLabel(card, text=subtitle, font=ctk.CTkFont(size=11), text_color=MUTED,
-                                       wraplength=236, justify="left")
-        subtitle_label.pack(anchor="w", padx=22)
-        button = ctk.CTkButton(card, text=f"Open {title}", height=28, fg_color=ACCENT,
+        title_label.pack(anchor="w", padx=16, pady=(16, 6))
+        subtitle_label = ctk.CTkLabel(card, text=subtitle, font=ctk.CTkFont(size=10), text_color=MUTED,
+                                       wraplength=194, justify="left")
+        subtitle_label.pack(anchor="w", padx=16)
+        button = ctk.CTkButton(card, text=f"Open {title}", height=24, fg_color=ACCENT,
                                 hover_color=ACCENT_HOVER, command=command)
-        button.pack(side="bottom", padx=22, pady=22, fill="x")
+        button.pack(side="bottom", padx=16, pady=16, fill="x")
         return card, {"title": title_label, "subtitle": subtitle_label, "button": button}
 
     def _on_root_resize(self, event):
@@ -115,12 +115,12 @@ class HomeScreen:
         if self._logo_img_raw is not None:
             self._logo_image.configure(size=(s(self.BASE_LOGO_SIZE[0]), s(self.BASE_LOGO_SIZE[1])))
         else:
-            self.logo_label.configure(font=ctk.CTkFont(size=s(28), weight="bold"))
+            self.logo_label.configure(font=ctk.CTkFont(size=s(24), weight="bold"))
 
-        self.subtitle_label.configure(font=ctk.CTkFont(size=s(14)))
+        self.subtitle_label.configure(font=ctk.CTkFont(size=s(12)))
 
         for card, widgets in ((self.card1, self.card1_widgets), (self.card2, self.card2_widgets)):
             card.configure(width=s(self.BASE_CARD_SIZE[0]), height=s(self.BASE_CARD_SIZE[1]))
-            widgets["title"].configure(font=ctk.CTkFont(size=s(17), weight="bold"))
-            widgets["subtitle"].configure(font=ctk.CTkFont(size=s(11)), wraplength=s(236))
-            widgets["button"].configure(font=ctk.CTkFont(size=s(13)), height=s(28))
+            widgets["title"].configure(font=ctk.CTkFont(size=s(14), weight="bold"))
+            widgets["subtitle"].configure(font=ctk.CTkFont(size=s(10)), wraplength=s(194))
+            widgets["button"].configure(font=ctk.CTkFont(size=s(11)), height=s(24))

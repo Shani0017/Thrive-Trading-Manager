@@ -111,14 +111,27 @@ class TradeManagerApp:
         chart_overview_row = ctk.CTkFrame(content, fg_color="transparent")
         chart_overview_row.pack(fill="x", padx=16, pady=(0, 8))
 
-        chart_col = ctk.CTkFrame(chart_overview_row, fg_color="transparent")
-        chart_col.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        # Both columns get pack_propagate(False) with widths recomputed as a
+        # fixed proportion of the row's actual width on every resize (same
+        # pattern as the positions/journal tables' _on_tree_resize). Without
+        # this, the matplotlib chart's natural pixel width (from its figsize
+        # in inches * dpi) can exceed the space actually available once the
+        # window is narrower than ~1300px, and pack's default behavior is to
+        # let a child's requested size grow the row instead of shrinking the
+        # child -- pushing Account Overview off the right edge of the window
+        # with no horizontal scrollbar to reach it.
+        self.chart_col = ctk.CTkFrame(chart_overview_row, fg_color="transparent")
+        self.chart_col.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        self.chart_col.pack_propagate(False)
 
-        overview_col = ctk.CTkFrame(chart_overview_row, fg_color="transparent")
-        overview_col.pack(side="left", fill="both", expand=True, padx=(8, 0))
+        self.overview_col = ctk.CTkFrame(chart_overview_row, fg_color="transparent")
+        self.overview_col.pack(side="left", fill="both", expand=True, padx=(8, 0))
+        self.overview_col.pack_propagate(False)
 
-        self._build_chart_panel(chart_col)
-        self._build_account_overview(overview_col)
+        chart_overview_row.bind("<Configure>", self._on_chart_row_resize)
+
+        self._build_chart_panel(self.chart_col)
+        self._build_account_overview(self.overview_col)
 
         self._build_detail_panel(content)
 
@@ -290,6 +303,16 @@ class TradeManagerApp:
             return
         for col, weight in self._column_weights.items():
             self.tree.column(col, width=max(30, int(total_width * weight)))
+
+    def _on_chart_row_resize(self, event):
+        total_width = event.width
+        if total_width <= 1:
+            return
+        gap = 16  # the (0, 8) + (8, 0) padx between the two columns
+        chart_width = max(200, int((total_width - gap) * 0.64))
+        overview_width = max(160, total_width - gap - chart_width)
+        self.chart_col.configure(width=chart_width)
+        self.overview_col.configure(width=overview_width)
 
     def _setup_treeview_style(self):
         """ttk.Treeview has no CustomTkinter equivalent (CTk provides no table
@@ -517,7 +540,7 @@ class TradeManagerApp:
             self._timeframe_buttons[tf] = btn
         self._refresh_timeframe_buttons()
 
-        fig = Figure(figsize=(10, 1.9), dpi=100, facecolor=CARD)
+        fig = Figure(figsize=(6, 1.9), dpi=100, facecolor=CARD)
         self.chart_ax = fig.add_subplot(111)
         self._style_chart_axes()
         self.chart_ax.text(0.5, 0.5, "Select a position to view its chart", color=MUTED,

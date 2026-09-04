@@ -11,7 +11,7 @@ Launches to a home screen with two tools:
   records (real data, reconstructed by pairing each position's entry/exit
   deals), with a running P&L/win-rate summary, date-range and symbol filters,
   and a "source" note per trade (e.g. "My Analysis", "XYZ Trader", "XYZ
-  YouTube") saved locally next to the app in `trade_sources.json`.
+  YouTube") saved locally in `%APPDATA%\THRIVE Trade Manager\trade_sources.json`.
 
 ## Running it (developer)
 

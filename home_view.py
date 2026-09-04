@@ -6,6 +6,8 @@ from PIL import Image
 from gui import BG, CARD, BORDER, TEXT, MUTED, ACCENT, ACCENT_HOVER, _resource_path
 from update_check import fetch_latest_release, is_newer, APP_VERSION
 
+FEEDBACK_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfHOk41U3m0X-QWuY1VpG751j-F8WgaXtLb_RWkyoyvFHU03g/viewform"
+
 
 class HomeScreen:
     """Landing page shown on launch: lets the user choose between the Trade
@@ -76,6 +78,23 @@ class HomeScreen:
             on_open_journal)
         self.card2.pack(side="left", padx=8)
 
+        links_row = ctk.CTkFrame(self.center, fg_color="transparent")
+        links_row.pack(pady=(16, 0))
+        ctk.CTkButton(links_row, text="💬 Send Feedback", width=140, height=26,
+                      font=ctk.CTkFont(size=11), fg_color=CARD, hover_color=BORDER,
+                      text_color=MUTED, border_width=1, border_color=BORDER,
+                      command=lambda: webbrowser.open(FEEDBACK_FORM_URL)).pack(side="left", padx=6)
+        self.check_update_btn = ctk.CTkButton(
+            links_row, text="🔄 Check for Updates", width=160, height=26,
+            font=ctk.CTkFont(size=11), fg_color=CARD, hover_color=BORDER,
+            text_color=MUTED, border_width=1, border_color=BORDER,
+            command=self._manual_check_for_update)
+        self.check_update_btn.pack(side="left", padx=6)
+
+        self.update_status_label = ctk.CTkLabel(self.center, text="", font=ctk.CTkFont(size=10),
+                                                  text_color=MUTED)
+        self.update_status_label.pack(pady=(6, 0))
+
         self.root.bind("<Configure>", self._on_root_resize)
 
         # The GitHub API call is real network I/O -- it must never run on
@@ -84,26 +103,51 @@ class HomeScreen:
         # a widget directly; _poll_update_queue (running via root.after on
         # the main thread) is the only thing that ever updates the UI,
         # which sidesteps Tkinter's general unsafety with cross-thread
-        # widget calls.
+        # widget calls. This same poll loop keeps rescheduling itself
+        # (cheap: one non-blocking queue check every 500ms) for as long as
+        # Home is showing, so a later manual "Check for Updates" click just
+        # needs to queue a new result -- it doesn't need its own poll loop.
         threading.Thread(target=self._check_for_update_worker, daemon=True).start()
         self._update_poll_job = self.root.after(500, self._poll_update_queue)
 
-    def _check_for_update_worker(self):
+    def _check_for_update_worker(self, manual=False):
+        """manual=False (automatic, on-load check): stays silent unless a
+        newer version actually exists -- nobody wants to be told "you're
+        up to date" every single time they open the app. manual=True (the
+        button): always reports back, success or failure, since a button
+        the user explicitly clicked needs to visibly do SOMETHING."""
         result = fetch_latest_release()
         if result is None:
+            if manual:
+                self._update_result_queue.put(("error", None, None))
             return
         tag, url = result
         if is_newer(tag, APP_VERSION):
-            self._update_result_queue.put((tag, url))
+            self._update_result_queue.put(("update", tag, url))
+        elif manual:
+            self._update_result_queue.put(("uptodate", tag, None))
+
+    def _manual_check_for_update(self):
+        self.check_update_btn.configure(state="disabled")
+        self.update_status_label.configure(text="Checking for updates...")
+        threading.Thread(target=self._check_for_update_worker, kwargs={"manual": True}, daemon=True).start()
 
     def _poll_update_queue(self):
         self._update_poll_job = None
         try:
-            tag, url = self._update_result_queue.get_nowait()
+            kind, tag, url = self._update_result_queue.get_nowait()
         except queue.Empty:
             self._update_poll_job = self.root.after(500, self._poll_update_queue)
             return
-        self._show_update_banner(tag, url)
+        if kind == "update":
+            self._show_update_banner(tag, url)
+            self.update_status_label.configure(text="")
+        elif kind == "uptodate":
+            self.update_status_label.configure(text=f"You're on the latest version ({APP_VERSION}).")
+        elif kind == "error":
+            self.update_status_label.configure(text="Couldn't check for updates -- check your internet connection.")
+        self.check_update_btn.configure(state="normal")
+        self._update_poll_job = self.root.after(500, self._poll_update_queue)
 
     def _show_update_banner(self, tag, url):
         if self._update_banner is not None:

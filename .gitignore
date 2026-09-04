@@ -7,3 +7,4 @@ dist/
 trade_sources.json
 mt5_trade_manager_error.log
 build*.log
+release_notes.txt

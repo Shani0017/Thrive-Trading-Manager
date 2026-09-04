@@ -87,6 +87,30 @@ class HomeScreen:
         button.pack(side="bottom", padx=16, pady=16, fill="x")
         return card, {"title": title_label, "subtitle": subtitle_label, "button": button}
 
+    def stop(self):
+        """Cancels the pending debounced resize callback, if any, AND
+        unbinds <Configure> from root -- both are needed. Canceling the
+        job alone isn't enough: the <Configure> binding lives on root
+        itself (not on this screen's own widgets), so it survives this
+        screen being destroyed, and the very next page's own construction
+        (which resizes/repacks root) fires a fresh <Configure> event that
+        re-arms _on_root_resize -> schedules a NEW _apply_scale call
+        against widgets that no longer exist (confirmed directly: this
+        raised TclError even with the pending job correctly canceled).
+        No other page binds <Configure> on root itself (only on specific
+        child widgets, for their own column-resize logic), so unbinding
+        it here can't affect anything else."""
+        if self._resize_job is not None:
+            try:
+                self.root.after_cancel(self._resize_job)
+            except Exception:
+                pass
+            self._resize_job = None
+        try:
+            self.root.unbind("<Configure>")
+        except Exception:
+            pass
+
     def _on_root_resize(self, event):
         if event.widget is not self.root:
             return

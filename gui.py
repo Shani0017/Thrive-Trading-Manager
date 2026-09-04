@@ -382,7 +382,11 @@ class TradeManagerApp:
         seed_fn (optional): called to get a starting value when the field
         is empty and a stepper is clicked -- without this, bumping from an
         empty field starts at 0, which for a real price (e.g. Gold at
-        ~4436) needs dozens of clicks to reach anything meaningful."""
+        ~4436) needs dozens of clicks to reach anything meaningful.
+
+        decimals may also be a callable (returning an int) instead of a
+        fixed number -- SL/TP fields need this to match whichever symbol
+        is currently selected (2 for Gold, 5 for most forex pairs)."""
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         entry = ctk.CTkEntry(frame, width=width, height=26, border_color=BORDER,
                               fg_color=CARD, text_color=TEXT)
@@ -402,8 +406,9 @@ class TradeManagerApp:
             else:
                 val = seed_fn() if seed_fn else 0.0
             sign = sign_fn() if sign_fn else 1
+            dec = decimals() if callable(decimals) else decimals
             entry.delete(0, tk.END)
-            entry.insert(0, f"{val + step * sign * direction:.{decimals}f}")
+            entry.insert(0, f"{val + step * sign * direction:.{dec}f}")
             entry.event_generate("<KeyRelease>")
 
         ctk.CTkButton(stepper, text="▲", width=18, height=15, font=ctk.CTkFont(size=8),
@@ -513,7 +518,7 @@ class TradeManagerApp:
         sl_line = ctk.CTkFrame(sl_box, fg_color="transparent")
         sl_line.pack(fill="x", padx=10)
         self.sl_field_frame, self.sl_entry = self._make_number_field(
-            sl_line, width=64, step=0.1, decimals=5,
+            sl_line, width=64, step=0.1, decimals=lambda: self._price_decimals(self._selected_symbol()),
             sign_fn=lambda: self._sltp_sign("SL"), seed_fn=self._current_price_seed)
         self.sl_field_frame.pack(side="left")
         self.sl_entry.bind("<KeyRelease>", self._update_risk_reward)
@@ -532,7 +537,7 @@ class TradeManagerApp:
         tp_line = ctk.CTkFrame(tp_box, fg_color="transparent")
         tp_line.pack(fill="x", padx=10)
         self.tp_field_frame, self.tp_entry = self._make_number_field(
-            tp_line, width=64, step=0.1, decimals=5,
+            tp_line, width=64, step=0.1, decimals=lambda: self._price_decimals(self._selected_symbol()),
             sign_fn=lambda: self._sltp_sign("TP"), seed_fn=self._current_price_seed)
         self.tp_field_frame.pack(side="left")
         self.tp_entry.bind("<KeyRelease>", self._update_risk_reward)
@@ -872,9 +877,10 @@ class TradeManagerApp:
         for p in positions:
             direction = "BUY" if p.type == self.mt5.POSITION_TYPE_BUY else "SELL"
             pips_text = self._pips_text(p, direction)
+            decimals = self._price_decimals(p.symbol)
             values = (p.symbol, direction, p.volume,
-                      f"{p.price_open:.5f}", f"{p.price_current:.5f}",
-                      f"{p.profit:.2f}", pips_text, f"{p.sl:.5f}", f"{p.tp:.5f}")
+                      f"{p.price_open:.{decimals}f}", f"{p.price_current:.{decimals}f}",
+                      f"{p.profit:.2f}", pips_text, f"{p.sl:.{decimals}f}", f"{p.tp:.{decimals}f}")
             iid = str(p.ticket)
             if iid in current_iids:
                 self.tree.item(iid, values=values)
@@ -924,12 +930,13 @@ class TradeManagerApp:
         self._set_action_panel_enabled(True)
         self._set_detail_result("", "neutral")
         position = self.positions_by_ticket[self.selected_ticket]
+        decimals = self._price_decimals(position.symbol)
         self.sl_entry.delete(0, tk.END)
         if position.sl:
-            self.sl_entry.insert(0, f"{position.sl:.5f}")
+            self.sl_entry.insert(0, f"{position.sl:.{decimals}f}")
         self.tp_entry.delete(0, tk.END)
         if position.tp:
-            self.tp_entry.insert(0, f"{position.tp:.5f}")
+            self.tp_entry.insert(0, f"{position.tp:.{decimals}f}")
         self._update_detail_header(position)
 
     # ------------------------------------------------------------------
@@ -963,10 +970,11 @@ class TradeManagerApp:
         self.detail_pl_label.configure(text=f"{'+' if profit >= 0 else ''}${profit:.2f}", text_color=tone)
         self.detail_pl_pips_label.configure(text=f"({self._pips_text(position, direction)} pips)")
 
-        self.detail_entry_price_label.configure(text=f"{position.price_open:.5f}")
-        self.detail_current_price_label.configure(text=f"{position.price_current:.5f}")
-        self.current_sl_label.configure(text=f"{position.sl:.5f}" if position.sl else "—")
-        self.current_tp_label.configure(text=f"{position.tp:.5f}" if position.tp else "—")
+        decimals = self._price_decimals(position.symbol)
+        self.detail_entry_price_label.configure(text=f"{position.price_open:.{decimals}f}")
+        self.detail_current_price_label.configure(text=f"{position.price_current:.{decimals}f}")
+        self.current_sl_label.configure(text=f"{position.sl:.{decimals}f}" if position.sl else "—")
+        self.current_tp_label.configure(text=f"{position.tp:.{decimals}f}" if position.tp else "—")
         self.validated_label.configure(text=f"Validated for {direction} position")
 
         self._update_be_preview()
@@ -1024,6 +1032,23 @@ class TradeManagerApp:
         position = self.positions_by_ticket.get(self.selected_ticket) if self.selected_ticket else None
         return position.price_current if position is not None else 0.0
 
+    def _price_decimals(self, symbol) -> int:
+        """Decimal places for displaying/entering a price, SL, or TP --
+        matches the symbol's own quoting precision (2 for Gold, 5 for most
+        forex pairs) instead of a one-size-fits-all 5, which showed Gold
+        prices as e.g. 4436.09000 -- needlessly precise and inconsistent
+        with how the symbol actually quotes."""
+        if symbol is None:
+            return 5
+        try:
+            return self.mt5.symbol_info(symbol).digits
+        except Exception:
+            return 5
+
+    def _selected_symbol(self):
+        position = self.positions_by_ticket.get(self.selected_ticket) if self.selected_ticket else None
+        return position.symbol if position is not None else None
+
     def _update_be_preview(self):
         position = self.positions_by_ticket.get(self.selected_ticket) if self.selected_ticket else None
         if position is None:
@@ -1036,7 +1061,7 @@ class TradeManagerApp:
             if self.be_mode == "pips":
                 pips = float(self.pips_offset_entry.get().strip() or 0)
             new_sl = _breakeven_price(direction, position.price_open, _pip_size(symbol_info), pips)
-            self.be_preview_value.configure(text=f"{new_sl:.5f}")
+            self.be_preview_value.configure(text=f"{new_sl:.{symbol_info.digits}f}")
         except Exception:
             self.be_preview_value.configure(text="—")
 

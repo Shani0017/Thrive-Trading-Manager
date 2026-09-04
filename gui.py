@@ -582,11 +582,19 @@ class TradeManagerApp:
         self._style_chart_axes()
         self.chart_ax.text(0.5, 0.5, "Select a position to view its chart", color=MUTED,
                             ha="center", va="center", transform=self.chart_ax.transAxes, fontsize=10)
-        fig.subplots_adjust(left=0.04, right=0.90, top=0.94, bottom=0.06)
+        # Margins trimmed to the minimum the chart actually needs: right
+        # still reserves a little room for the price-tag annotation (it
+        # draws past the axes' right edge via annotation_clip=False) so it
+        # doesn't get clipped by the figure boundary, and left only needs
+        # enough for the y-axis tick labels aren't used on that side (the
+        # price axis is on the right -- see _style_chart_axes). The old
+        # margins (0.04/0.90) plus 14px of outer canvas padding left
+        # visible dead space on both sides of the actual candles.
+        fig.subplots_adjust(left=0.01, right=0.93, top=0.94, bottom=0.06)
 
         self.chart_canvas = FigureCanvasTkAgg(fig, master=card)
         self.chart_canvas.get_tk_widget().configure(bg=CARD, highlightthickness=0)
-        self.chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=14, pady=(0, 10))
+        self.chart_canvas.get_tk_widget().pack(fill="both", expand=True, padx=6, pady=(0, 10))
         self.chart_canvas.draw()
 
     def _refresh_timeframe_buttons(self):
